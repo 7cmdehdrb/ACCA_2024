@@ -1,0 +1,20 @@
+imu - https://github.com/bluespace-ai/bluespace_ai_xsens_ros_mti_driver?search=1
+    - 얘는 Xsens사에서 제공하는 원본 패키지가 아니라서 테스트 필요
+    - https://base.movella.com/s/article/Third-Party-Drivers-for-use-with-the-MTi?language=en_US
+    	(xsens 사에서 써도 된다고 말함.)
+    
+    - https://base.movella.com/s/article/All-MTi-Related-Documentation-Links?language=en_US
+	ㄴhumble은 여기서 해야할듯
+	ㄴimu에 ntrip 못쓰니까 ntrip만 무시하고 확인해보면 될듯
+	ㄴpushd src/xsens_mti_ros2_driver/lib/xspublic && make && popd <- 이거 할 때 경로 정확히 입력해주기
+
+    -센서 연결은 확인 되었고 파라미터에서 공분산 작년거랑 비교해서 똑같이?? 넣기 (imu 공분산은 고정값, gps랑 다름.)
+	
+
+gps - https://github.com/gokulp01/ros2-ublox-zedf9p (x)
+    - https://github.com/KumarRobotics/ublox/tree/ros2 (o)
+    - 작년 패키지 깃허브 원본이랑 비교해보면서 달리진 부분 있는지 check, 있다면 ros2 패키지에도 똑같이 반영
+    - https://hm02123.tistory.com/8 
+    
+
+ntrip_ros -재훈이형이 작년에 짠 코드 잘 활용하기 (5초마다 서버 재접속 시도하는 code = ntrip_ros)
