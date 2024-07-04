@@ -26,6 +26,8 @@ setup(
             "kalman = test_pkg.kalman:main",
             "wheel_odomety = test_pkg.wheel_odomety:main",
             "test = test_pkg.test:main",
+            "velodyne_points2 = test_pkg.velodyne_points2:main",
+            "velodyne_tf = test_pkg.velodyne_tf:main",
         ],
     },
 )

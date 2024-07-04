@@ -2,7 +2,7 @@ kalman_localization_node:
   ros__parameters:
     topic: "/odometry/kalman"
 
-    is_publish_tf: true
+    is_publish_tf: false
 
     frame_id: "odom"
     child_frame_id: "base_link"
