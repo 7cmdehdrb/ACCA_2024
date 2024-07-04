@@ -52,6 +52,8 @@ def generate_launch_description():
         parameters=[localization_param_dir],
         remappings=[
             ("/velodyne_points", "/velodyne_points2"),
+            ("/odom", "/odometry/kalman"),
+            ("/imu", "/imu/data"),
             # ('pcl_pose', 'localization/kinematic_state'),
         ],
         output="screen",
@@ -106,6 +108,7 @@ def generate_launch_description():
 
     ld.add_action(pcl_localization)
     # ld.add_action(lidar_tf)
+    # ld.add_action(imu_tf)
     ld.add_action(to_inactive)
 
     return ld

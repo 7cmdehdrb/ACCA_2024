@@ -1,14 +1,14 @@
 /**:
     ros__parameters:
       registration_method: "NDT_OMP"
-      score_threshold: 2.0
+      score_threshold: 100.0
       ndt_resolution: 2.0
       ndt_step_size: 0.1
       ndt_num_threads: 0
-      transform_epsilon: 0.0
-      voxel_leaf_size: 1.0
+      transform_epsilon: 0.01
+      voxel_leaf_size: 0.5
       scan_max_range: 100.0
-      scan_min_range: 10.0
+      scan_min_range: 1.0
       scan_period: 0.1
       use_pcd_map: true
       map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
