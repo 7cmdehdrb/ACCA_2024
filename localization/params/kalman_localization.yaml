@@ -2,7 +2,7 @@ kalman_localization_node:
   ros__parameters:
     topic: "/odometry/kalman"
 
-    is_publish_tf: false
+    is_publish_tf: true
 
     frame_id: "odom"
     child_frame_id: "base_link"
@@ -23,7 +23,7 @@ kalman_localization_node:
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 99.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0001, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     ]
 
@@ -32,8 +32,8 @@ kalman_localization_node:
                         0.0, 0.0, 0.0, 0.0, 0.0,
                         0.0, 0.0, 0.0, 0.0, 0.0,
                         0.0, 0.0, 0.0, 0.0, 0.0,
-                        0.0, 0.0, 0.0, 99.0, 0.0,
-                        0.0, 0.0, 0.0, 0.0, 99.0,
+                        0.0, 0.0, 0.0, 0.0001, 0.0,
+                        0.0, 0.0, 0.0, 0.0, 0.0001,
                         ]
 
     imu_topic: "/imu/data"

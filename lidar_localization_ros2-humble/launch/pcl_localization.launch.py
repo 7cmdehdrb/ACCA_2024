@@ -35,6 +35,13 @@ def generate_launch_description():
         arguments=["0", "0", "0", "0", "0", "0", "1", "base_link", "imu_link"],
     )
 
+    test = launch_ros.actions.Node(
+        name="test_tf",
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=["0", "0", "0", "0", "0", "0", "1", "odom", "base_link"],
+    )
+
     localization_param_dir = launch.substitutions.LaunchConfiguration(
         "localization_param_dir",
         default=os.path.join(
@@ -52,8 +59,8 @@ def generate_launch_description():
         parameters=[localization_param_dir],
         remappings=[
             ("/velodyne_points", "/velodyne_points2"),
-            ("/odom", "/odometry/kalman"),
-            ("/imu", "/imu/data"),
+            # ("/odom", "/odometry/kalman"),
+            # ("/imu", "/imu/data"),
             # ('pcl_pose', 'localization/kinematic_state'),
         ],
         output="screen",
@@ -107,8 +114,9 @@ def generate_launch_description():
     ld.add_action(from_inactive_to_active)
 
     ld.add_action(pcl_localization)
-    # ld.add_action(lidar_tf)
+    ld.add_action(lidar_tf)
     # ld.add_action(imu_tf)
+    # ld.add_action(test)
     ld.add_action(to_inactive)
 
     return ld

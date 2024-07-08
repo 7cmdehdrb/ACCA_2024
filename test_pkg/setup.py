@@ -28,6 +28,8 @@ setup(
             "test = test_pkg.test:main",
             "velodyne_points2 = test_pkg.velodyne_points2:main",
             "velodyne_tf = test_pkg.velodyne_tf:main",
+            "tf_test = test_pkg.tf_test:main",
+            "tf_test3 = test_pkg.tf_test3:main",
         ],
     },
 )

@@ -23,9 +23,9 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "kalman_localization = localization.kalman_localization:main",
             "param_test = localization.param_test:main",
-            "velodyne_tf = localization.velodyne_tf:main",
+            "kalman_localization = localization.kalman_localization:main",
+            "map_odom_tf_publisher = localization.map_odom_tf_publisher:main",
         ],
     },
 )

@@ -122,7 +122,9 @@ class Kalman(object):
 
         self.Q = np.reshape(
             a=np.array(
-                node.get_parameter("noise").get_parameter_value().double_array_value
+                self.node.get_parameter("noise")
+                .get_parameter_value()
+                .double_array_value
             ),
             newshape=(5, 5),
         )
@@ -252,7 +254,7 @@ class Kalman(object):
         tf_msg.header.frame_id = (
             self.node.get_parameter("frame_id").get_parameter_value().string_value
         )
-        tf_msg.header.stamp = self.node.get_clock().now().to_msg()
+        tf_msg.header.stamp = rclpy.time.Time().to_msg()
         tf_msg.child_frame_id = (
             self.node.get_parameter("child_frame_id").get_parameter_value().string_value
         )
@@ -377,7 +379,7 @@ class Ublox(Sensor):
         if self.use_covariance is True:
             self.cov = np.reshape(
                 a=np.array(
-                    self.get_parameter("gps_covariance")
+                    self.node.get_parameter("gps_covariance")
                     .get_parameter_value()
                     .double_array_value
                 ),
@@ -483,7 +485,7 @@ class Xsens(Sensor):
         if self.use_covariance is True:
             self.cov = np.reshape(
                 a=np.array(
-                    self.get_parameter("imu_covariance")
+                    self.node.get_parameter("imu_covariance")
                     .get_parameter_value()
                     .double_array_value
                 ),
@@ -674,7 +676,6 @@ def main():
     thread.start()
 
     rate = node.create_rate(30)
-    node.get_logger().info("WAITING SENSORS...")
 
     try:
         while rclpy.ok():
@@ -683,8 +684,8 @@ def main():
             x, P = kalman.filter()
 
             node.get_logger().info(
-                "X: {}\tY: {}\tYAW: {}".format(
-                    round(x[0], 3), round(x[1], 3), round(x[2], 3)
+                "X: {}\tY: {}\tV: {}\tYAW: {}".format(
+                    round(x[0], 3), round(x[1], 3), round(x[3], 3), round(x[2], 3)
                 )
             )
 
@@ -693,7 +694,7 @@ def main():
             if is_publish_tf is True:
                 tf_publisher.sendTransform(kalman.getTF())
 
-            rate.sleep()
+            # rate.sleep()
 
     except KeyboardInterrupt:
         pass
