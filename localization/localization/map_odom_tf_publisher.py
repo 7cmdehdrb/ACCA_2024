@@ -1,12 +1,18 @@
 import rclpy
+import rclpy.duration
 from rclpy.node import Node
 import numpy as np
 import math as m
 import rclpy.time
 import tf2_ros
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+import threading
 
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped as PS
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Float32
 
 
 def euler_from_quaternion(quaternion):
@@ -60,6 +66,8 @@ class Map_Odom_TF_Publisher(Node):
     def __init__(self):
         super().__init__("map_odom_tf_node")
 
+        self.test = False
+
         self.params = self.declare_parameters(
             namespace="",
             parameters=(
@@ -77,6 +85,13 @@ class Map_Odom_TF_Publisher(Node):
 
         self.tf_publisher = tf2_ros.TransformBroadcaster(self, qos=10)
 
+        self.buffer = Buffer()
+        self.tf_listener = TransformListener(self.buffer, self)
+
+        self.initpose_pub = self.create_publisher(
+            PoseWithCovarianceStamped, "/initialpose", qos_profile=10
+        )
+
         self.pcl_subscriber = self.create_subscription(
             PoseWithCovarianceStamped,
             self.map_topic,
@@ -88,14 +103,26 @@ class Map_Odom_TF_Publisher(Node):
             Odometry, self.odom_topic, callback=self.odom_callback, qos_profile=10
         )
 
-        self.pcl = None
-        self.odom = None
+        self.score_subscriber = self.create_subscription(
+            Float32, "/pcl_score", callback=self.score_callback, qos_profile=10
+        )
+
+        self.pcl = PoseWithCovarianceStamped()
+        self.odom = Odometry()
+        self.score = 0.0
+
+        self.tf_msg = tf2_ros.TransformStamped()
 
     def pcl_callback(self, msg):
         self.pcl = msg
 
+        self.publish_tf()
+
     def odom_callback(self, msg):
         self.odom = msg
+
+    def score_callback(self, msg):
+        self.score = msg.data
 
     def publish_tf(self):
         tf_msg = tf2_ros.TransformStamped()
@@ -103,10 +130,6 @@ class Map_Odom_TF_Publisher(Node):
         tf_msg.header.frame_id = "map"
         tf_msg.header.stamp = rclpy.time.Time().to_msg()
         tf_msg.child_frame_id = "odom"
-
-        if self.pcl is None or self.odom is None:
-            self.tf_publisher.sendTransform(tf_msg)
-            return 0
 
         p1 = self.odom.pose.pose
         _, _, yaw1 = euler_from_quaternion(
@@ -151,10 +174,9 @@ class Map_Odom_TF_Publisher(Node):
         tf_msg.transform.rotation.z = rot[2]
         tf_msg.transform.rotation.w = rot[3]
 
-        print(trans)
-        print(rot)
+        self.tf_msg = tf_msg
 
-        self.tf_publisher.sendTransform(tf_msg)
+        self.tf_publisher.sendTransform(self.tf_msg)
 
 
 def main():
@@ -162,18 +184,10 @@ def main():
 
     node = Map_Odom_TF_Publisher()
 
-    r = node.create_rate(10)
+    rclpy.spin(node)
 
-    try:
-        while rclpy.ok():
-            rclpy.spin_once(node)
-            node.publish_tf()
-            # r.sleep()
-    except Exception as ex:
-        node.get_logger().warn(ex)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":

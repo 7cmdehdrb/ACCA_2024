@@ -26,6 +26,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/float32.hpp"
 
 #include <pclomp/ndt_omp.h>
 #include <pclomp/ndt_omp_impl.hpp>
@@ -84,6 +85,9 @@ public:
   rclcpp::Subscription<sensor_msgs::msg::Imu>::ConstSharedPtr
     imu_sub_;
 
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr score_pub_;
+  std::shared_ptr<std_msgs::msg::Float32> score_msg;
+
   boost::shared_ptr<pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>> registration_;
   pcl::VoxelGrid<pcl::PointXYZI> voxel_grid_filter_;
   geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr corrent_pose_with_cov_stamped_ptr_;
@@ -121,6 +125,7 @@ public:
   double last_odom_received_time_;
   bool use_imu_{false};
   bool enable_debug_{false};
+  bool is_publish_tf_{false};
 
   int ndt_num_threads_;
 

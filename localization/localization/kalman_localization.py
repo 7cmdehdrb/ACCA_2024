@@ -11,7 +11,7 @@ import time
 import threading
 
 # Msgs
-from std_msgs.msg import Empty, Header
+from std_msgs.msg import Empty, Header, Float64MultiArray
 from sensor_msgs.msg import Imu, NavSatFix
 from erp42_msgs.msg import SerialFeedBack
 from geometry_msgs.msg import Point
@@ -246,6 +246,11 @@ class Kalman(object):
         msg.pose.covariance[0] = self.P[0][0]
         msg.pose.covariance[7] = self.P[1][1]
 
+        msg.twist.twist.linear.x = self.x[3] * m.cos(self.x[2])
+        msg.twist.twist.linear.y = self.x[3] * m.sin(self.x[2])
+
+        msg.twist.twist.angular.z = self.x[4]
+
         return msg
 
     def getTF(self):
@@ -349,13 +354,14 @@ class Ublox(Sensor):
         self.dt = 0.0
 
     def calculateDistance(self, p1, p2):
-        return m.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
+        return m.sqrt(((p1.x - p2.x) ** 2) + ((p1.y - p2.y) ** 2))
 
     def callback(self, msg):
         # Callback Function: transform latitude & longitude to v
 
         current_time = time.time()
         self.dt = current_time - self.last_time
+        self.last_time = current_time
 
         # msg = NavSatFix()
         lat = msg.latitude
@@ -372,6 +378,7 @@ class Ublox(Sensor):
 
         distance = self.calculateDistance(self.last_position, current_point)
         distance = distance if distance > 0.012 else 0.0
+
         velocity = distance / self.dt
 
         self.x[3] = velocity
@@ -395,15 +402,18 @@ class Ublox(Sensor):
                         0.0,
                         0.0,
                         0.0,
-                        msg.position_covariance[0] * m.sqrt(111319.490793) / self.dt,
+                        msg.position_covariance[0] * m.sqrt(111319.490793),
                         0.0,
                     ],  # v
                     [0.0, 0.0, 0.0, 0.0, 0.0],  # vyaw
                 ]
             )
 
+        # self.node.get_logger().info(
+        #     "\ndt: {}\nv: {}\ncov: {}".format(self.dt, velocity, self.cov[3][3])
+        # )
+
         self.last_position = current_point
-        self.last_time = current_time
 
 
 # ERP42 Serial
@@ -667,39 +677,38 @@ def main():
         qos_profile=10,
     )
 
+    # test = node.create_publisher(
+    #     topic="test", msg_type=Float64MultiArray, qos_profile=10
+    # )
+
     # TF Settings
     is_publish_tf = node.get_parameter("is_publish_tf").get_parameter_value().bool_value
     tf_publisher = tf2_ros.TransformBroadcaster(node, qos=10)
 
-    # Main Loop
     thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     thread.start()
-
-    rate = node.create_rate(30)
 
     try:
         while rclpy.ok():
             # rclpy.spin_once(node)
 
             x, P = kalman.filter()
+            odometry = kalman.getOdometry()
+            publisher.publish(odometry)
 
             node.get_logger().info(
-                "X: {}\tY: {}\tV: {}\tYAW: {}".format(
-                    round(x[0], 3), round(x[1], 3), round(x[3], 3), round(x[2], 3)
-                )
+                "\n{}\t{}\t{}\t{}\t{}".format(x[0], x[1], x[2], x[3], x[4])
             )
 
-            publisher.publish(kalman.getOdometry())
-
             if is_publish_tf is True:
-                tf_publisher.sendTransform(kalman.getTF())
+                tf_msg = kalman.getTF()
+                tf_publisher.sendTransform(tf_msg)
 
-            # rate.sleep()
+            time.sleep(1.0 / 30.0)
 
-    except KeyboardInterrupt:
-        pass
     except Exception as ex:
-        node.get_logger().warn(ex)
+        node.get_logger().warn(str(ex))
+
     finally:
         node.destroy_node()
         rclpy.shutdown()

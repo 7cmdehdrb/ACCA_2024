@@ -31,6 +31,7 @@ PCLLocalization::PCLLocalization(const rclcpp::NodeOptions & options)
   declare_parameter("use_odom", false);
   declare_parameter("use_imu", false);
   declare_parameter("enable_debug", false);
+  declare_parameter("is_publish_tf", false);
 }
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -177,6 +178,7 @@ void PCLLocalization::initializeParameters()
   get_parameter("use_odom", use_odom_);
   get_parameter("use_imu", use_imu_);
   get_parameter("enable_debug", enable_debug_);
+  get_parameter("is_publish_tf", is_publish_tf_);
 
   RCLCPP_INFO(get_logger(),"global_frame_id: %s", global_frame_id_.c_str());
   RCLCPP_INFO(get_logger(),"odom_frame_id: %s", odom_frame_id_.c_str());
@@ -196,6 +198,7 @@ void PCLLocalization::initializeParameters()
   RCLCPP_INFO(get_logger(),"use_odom: %d", use_odom_);
   RCLCPP_INFO(get_logger(),"use_imu: %d", use_imu_);
   RCLCPP_INFO(get_logger(),"enable_debug: %d", enable_debug_);
+  RCLCPP_INFO(get_logger(),"is_publish_tf: %d", is_publish_tf_);
 }
 
 void PCLLocalization::initializePubSub()
@@ -214,6 +217,11 @@ void PCLLocalization::initializePubSub()
     "initial_map",
     rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
+  // score_pub_ = create_publisher<std_msgs::msg::Float32>("pcl_score", 10);
+
+  score_pub_ = create_publisher<std_msgs::msg::Float32>(
+    "pcl_score", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+
   initial_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "initialpose", rclcpp::SystemDefaultsQoS(),
     std::bind(&PCLLocalization::initialPoseReceived, this, std::placeholders::_1));
@@ -222,9 +230,9 @@ void PCLLocalization::initializePubSub()
     "map", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable(),
     std::bind(&PCLLocalization::mapReceived, this, std::placeholders::_1));
 
-  odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
-    "odom", rclcpp::SensorDataQoS(),
-    std::bind(&PCLLocalization::odomReceived, this, std::placeholders::_1));
+  // odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+  //   "odom", rclcpp::SensorDataQoS(),
+  //   std::bind(&PCLLocalization::odomReceived, this, std::placeholders::_1));
 
   cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
     "velodyne_points", rclcpp::SensorDataQoS(),
@@ -479,20 +487,28 @@ void PCLLocalization::cloudReceived(const sensor_msgs::msg::PointCloud2::ConstSh
   corrent_pose_with_cov_stamped_ptr_->pose.pose.orientation = quat_msg;
   pose_pub_->publish(*corrent_pose_with_cov_stamped_ptr_);
 
-  geometry_msgs::msg::TransformStamped transform_stamped;
-  transform_stamped.header.stamp = msg->header.stamp;
-  transform_stamped.header.frame_id = global_frame_id_;
-  transform_stamped.child_frame_id = base_frame_id_;
-  transform_stamped.transform.translation.x = static_cast<double>(final_transformation(0, 3));
-  transform_stamped.transform.translation.y = static_cast<double>(final_transformation(1, 3));
-  transform_stamped.transform.translation.z = static_cast<double>(final_transformation(2, 3));
-  transform_stamped.transform.rotation = quat_msg;
-  broadcaster_.sendTransform(transform_stamped);
+  if (is_publish_tf_){
+    geometry_msgs::msg::TransformStamped transform_stamped;
+    transform_stamped.header.stamp = msg->header.stamp;
+    transform_stamped.header.frame_id = global_frame_id_;
+    transform_stamped.child_frame_id = base_frame_id_;
+    transform_stamped.transform.translation.x = static_cast<double>(final_transformation(0, 3));
+    transform_stamped.transform.translation.y = static_cast<double>(final_transformation(1, 3));
+    transform_stamped.transform.translation.z = static_cast<double>(final_transformation(2, 3));
+    transform_stamped.transform.rotation = quat_msg;
+    broadcaster_.sendTransform(transform_stamped);
+  }
+
 
   geometry_msgs::msg::PoseStamped::SharedPtr pose_stamped_ptr(new geometry_msgs::msg::PoseStamped);
   pose_stamped_ptr->header.stamp = msg->header.stamp;
   pose_stamped_ptr->header.frame_id = global_frame_id_;
   pose_stamped_ptr->pose = corrent_pose_with_cov_stamped_ptr_->pose.pose;
+
+  score_msg = std::make_shared<std_msgs::msg::Float32>();
+  score_msg->data = fitness_score;
+  score_pub_->publish(*score_msg);
+
   path_ptr_->poses.push_back(*pose_stamped_ptr);
   path_pub_->publish(*path_ptr_);
 
