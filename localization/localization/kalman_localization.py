@@ -164,6 +164,15 @@ class Kalman(object):
 
         R = R_t + self.gps.cov + self.xsens.cov + self.erp42.cov  # Convariances
 
+        self.node.get_logger().info(
+            "{}, {}, {}, {}".format(
+                round(self.gps.x[3], 3),
+                round(self.erp42.x[3], 3),
+                round(self.xsens.x[3], 3),
+                round(self.dt, 3),
+            )
+        )
+
         x_k = np.dot(self.A, self.x) + u_k  # Predicted State
 
         P_k = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q  # Predicted Convariance
@@ -688,16 +697,16 @@ def main():
     thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     thread.start()
 
+    # rclpy.spin_once(node)
     try:
         while rclpy.ok():
-            # rclpy.spin_once(node)
 
             x, P = kalman.filter()
             odometry = kalman.getOdometry()
             publisher.publish(odometry)
 
             node.get_logger().info(
-                "\n{}\t{}\t{}\t{}\t{}".format(x[0], x[1], x[2], x[3], x[4])
+                "\n{}\t{}\t{}".format(round(x[2], 3), round(x[3], 3), round(x[4], 3))
             )
 
             if is_publish_tf is True:
