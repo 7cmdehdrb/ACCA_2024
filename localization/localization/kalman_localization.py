@@ -164,14 +164,14 @@ class Kalman(object):
 
         R = R_t + self.gps.cov + self.xsens.cov + self.erp42.cov  # Convariances
 
-        self.node.get_logger().info(
-            "{}, {}, {}, {}".format(
-                round(self.gps.x[3], 3),
-                round(self.erp42.x[3], 3),
-                round(self.xsens.x[3], 3),
-                round(self.dt, 3),
-            )
-        )
+        # self.node.get_logger().info(
+        #     "\ngps:{}\terp{}\txsens{}, \tdt{}".format(
+        #         round(self.gps.x[3], 3),
+        #         round(self.erp42.x[3], 3),
+        #         round(self.xsens.x[3], 3),
+        #         round(self.dt, 3),
+        #     )
+        # )
 
         x_k = np.dot(self.A, self.x) + u_k  # Predicted State
 
@@ -705,9 +705,11 @@ def main():
             odometry = kalman.getOdometry()
             publisher.publish(odometry)
 
-            node.get_logger().info(
-                "\n{}\t{}\t{}".format(round(x[2], 3), round(x[3], 3), round(x[4], 3))
-            )
+            # node.get_logger().info(
+            #     "\nx-yaw{}\tx-v{}\tx-vyaw{}".format(
+            #         round(x[2], 3), round(x[3], 3), round(x[4], 3)
+            #     )
+            # )
 
             if is_publish_tf is True:
                 tf_msg = kalman.getTF()

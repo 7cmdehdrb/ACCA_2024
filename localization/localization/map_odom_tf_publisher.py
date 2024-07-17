@@ -1,9 +1,9 @@
 import rclpy
-import rclpy.duration
 from rclpy.node import Node
+import rclpy.duration
+import rclpy.time
 import numpy as np
 import math as m
-import rclpy.time
 import tf2_ros
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -147,6 +147,10 @@ class Map_Odom_TF_Publisher(Node):
 
         # Topic
 
+        self.err_pub = self.create_publisher(
+            Float32MultiArray, "/tf_err", qos_profile=10
+        )
+
         self.initpose_pub = self.create_publisher(
             PoseWithCovarianceStamped, "/initialpose", qos_profile=10
         )
@@ -168,6 +172,8 @@ class Map_Odom_TF_Publisher(Node):
 
         # Topic Variables
 
+        self.rate = self.create_rate(3.0)
+
         self.pcl = PoseWithCovarianceStamped()
         self.odom = Odometry()
         self.score = 0.0
@@ -182,94 +188,64 @@ class Map_Odom_TF_Publisher(Node):
 
         self.tf_msg = tf2_ros.TransformStamped()
 
+        self.last_time = time.time()
+        self.i_err = 0.0
+
+        self.err_stack = 0
+
+    def get_data(self):
+        return "linear: {}\tangular: {}\ti_linear_err: {}\tscore: {}".format(
+            round(self.linear_err, 3),
+            round(self.angular_err, 3),
+            round(self.i_err, 3),
+            round(self.score, 3),
+        )
+
     def update(self):
-        self.linear_err = abs(self.pcl_state.state[0] - self.odom_state.state[0])
+        current_time = time.time()
+        dt = current_time - self.last_time
+
+        # Calculate Errors
+
+        temp_linear_err = self.pcl_state.state[0] - self.odom_state.state[0]
+        self.linear_err = abs(temp_linear_err)
         self.angular_err = abs(self.pcl_state.state[1] - self.odom_state.state[1])
+
+        self.i_err += temp_linear_err * dt
 
         time_difference = abs(self.odom_state.time - self.pcl_state.time)
 
+        self.last_time = current_time
+
+        # Logic
+
+        # Absolutely Fraud Data
+        if self.score > 3.0:
+            return
+
+        # if time_difference > 2.0:
+        #     return
+
+        # reinitialize i_err (To prevent drift i_err)
+        if self.linear_err < 0.1:
+            self.i_err = 0.0
+
+        if self.linear_err < 1.5 and self.angular_err < 0.5 and abs(self.i_err) < 1.0:
+            self.update_tf()
+            self.err_stack = 0
+            return
+
+        self.get_logger().warn("Cannot trust TF data!")
+        self.err_stack += 1
+
         try:
-            # if time_difference > 2.0:
-            #     raise Exception("TF publisher is looking different time")
-
-            if (
-                self.linear_err < 1.5
-                and self.angular_err < 0.5
-                and self.score < 5.0
-                and time_difference < 2.0
-            ):
-
-                self.get_logger().info(
-                    "\nLinear err: {}\tAngular Err: {}\tPCL Score: {}".format(
-                        round(self.linear_err, 3),
-                        round(self.angular_err, 3),
-                        round(self.score, 3),
-                    )
-                )
-
-                self.stack = 0
-
-                self.update_tf()
-                self.publish_tf()
-
-            else:
-
-                self.get_logger().warn(
-                    "\nSome values are over threshhold!\nLinear Err: {}\tAngular Err: {}\tScore: {}".format(
-                        round(self.linear_err, 3),
-                        round(self.angular_err, 3),
-                        round(self.score, 3),
-                    )
-                )
-
-                self.publish_tf()
-                # self.stack += 1
-
-                if self.stack > 5:
-
-                    if self.buffer.can_transform(
-                        "map",
-                        "odom",
-                        rclpy.time.Time(),
-                        rclpy.duration.Duration(seconds=0.1),
-                    ):
-                        ps_odom = PS()
-                        ps_odom.header = self.odom.header
-                        ps_odom.pose = self.odom.pose.pose
-
-                        ps_odom_on_map = self.buffer.transform(
-                            ps_odom, "map", rclpy.duration.Duration(seconds=0.1)
-                        )
-
-                        pose_stamped_cov_map = PoseWithCovarianceStamped()
-                        pose_stamped_cov_map.header = ps_odom_on_map.header
-                        pose_stamped_cov_map.pose.pose = ps_odom_on_map.pose
-
-                        self.get_logger().info("Reinitializing...")
-                        self.initpose_pub.publish(pose_stamped_cov_map)
-
-                        self.stack = 0
-
-                    else:
-                        raise Exception("Cannot lookup transform between map and odom")
+            if self.err_stack > 10:
+                if self.tf_msg.header.frame_id == "map":
+                    self.err_stack = 0
+                    self.reinitialize()
 
         except Exception as ex:
             self.get_logger().warn(str(ex))
-
-    def pcl_callback(self, msg):
-        self.pcl = msg
-
-        self.pcl_state.update_state(msg)
-
-        self.update()
-
-    def odom_callback(self, msg):
-        self.odom = msg
-
-        self.odom_state.update_state(msg)
-
-    def score_callback(self, msg):
-        self.score = msg.data
 
     def update_tf(self):
         tf_msg = tf2_ros.TransformStamped()
@@ -325,6 +301,50 @@ class Map_Odom_TF_Publisher(Node):
 
     def publish_tf(self):
         self.tf_publisher.sendTransform(self.tf_msg)
+
+    def reinitialize(self):
+        if self.buffer.can_transform(
+            "map",
+            "odom",
+            rclpy.time.Time(),
+            rclpy.duration.Duration(seconds=0.1),
+        ):
+            ps_odom = PS()
+            ps_odom.header = self.odom.header
+            ps_odom.pose = self.odom.pose.pose
+
+            ps_odom_on_map = self.buffer.transform(
+                ps_odom, "map", rclpy.duration.Duration(seconds=0.1)
+            )
+
+            pose_stamped_cov_map = PoseWithCovarianceStamped()
+            pose_stamped_cov_map.header = ps_odom_on_map.header
+            pose_stamped_cov_map.pose.pose = ps_odom_on_map.pose
+
+            self.get_logger().info("Reinitializing...")
+            self.initpose_pub.publish(pose_stamped_cov_map)
+
+        else:
+            raise Exception("Cannot lookup transform")
+
+    def pcl_callback(self, msg):
+        self.pcl = msg
+
+        self.pcl_state.update_state(msg)
+
+        self.update()
+
+        self.publish_tf()
+
+        self.get_logger().info(self.get_data())
+
+    def odom_callback(self, msg):
+        self.odom = msg
+
+        self.odom_state.update_state(msg)
+
+    def score_callback(self, msg):
+        self.score = msg.data
 
 
 def main():
