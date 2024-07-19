@@ -217,17 +217,15 @@ void PCLLocalization::initializePubSub()
     "initial_map",
     rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
-  // score_pub_ = create_publisher<std_msgs::msg::Float32>("pcl_score", 10);
-
   score_pub_ = create_publisher<std_msgs::msg::Float32>(
-    "pcl_score", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+    "pcl_score", rclcpp::SystemDefaultsQoS());
 
   initial_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "initialpose", rclcpp::SystemDefaultsQoS(),
     std::bind(&PCLLocalization::initialPoseReceived, this, std::placeholders::_1));
 
   map_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-    "map", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable(),
+    "map", rclcpp::SystemDefaultsQoS(),
     std::bind(&PCLLocalization::mapReceived, this, std::placeholders::_1));
 
   // odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(

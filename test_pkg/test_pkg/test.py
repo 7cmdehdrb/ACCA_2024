@@ -1,35 +1,11 @@
-import rclpy
-from rclpy.node import Node
-import time
+import numpy as np
 
 
-class MyNode(Node):
-    def __init__(self):
-        super().__init__("my_node")
-        self.get_logger().info("Node has been started")
+a = np.array([[0, 1, 2]])
+b = np.array([[3, 4, 5]])
+c = np.array([[6, 7, 8]])
 
-    def do_something(self):
-        self.get_logger().info("Doing something")
+print(a + b + c)
+print(np.vstack((a, b, c)))
 
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = MyNode()
-
-    # Set the rate to 2 Hz (0.5 seconds)
-    rate = node.create_rate(2)
-
-    try:
-        while rclpy.ok():
-            rclpy.spin_once(node)
-            node.do_something()
-            rate.sleep()  # Sleep to enforce the loop rate
-    except KeyboardInterrupt:
-        pass
-
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == "__main__":
-    main()
+print(list(range(-1, 2)))

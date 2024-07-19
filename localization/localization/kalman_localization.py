@@ -1,6 +1,7 @@
 import rclpy
-import rclpy.logging
 from rclpy.node import Node
+from rclpy.qos import qos_profile_system_default
+import rclpy.logging
 import rclpy.time
 import tf2_ros
 from abc import *
@@ -293,7 +294,9 @@ class Sensor(object):
         self.use_covariance = False
 
         # Subscriber
-        self.subscriber = self.node.create_subscription(dtype, topic, self.callback, 10)
+        self.subscriber = self.node.create_subscription(
+            dtype, topic, self.callback, qos_profile_system_default
+        )
 
         # Sensing Data
         self.x = np.array(
@@ -388,7 +391,7 @@ class Ublox(Sensor):
         distance = self.calculateDistance(self.last_position, current_point)
         distance = distance if distance > 0.012 else 0.0
 
-        velocity = distance / self.dt
+        velocity = distance / self.dt if self.dt > 0.0 else self.x[3]
 
         self.x[3] = velocity
 
@@ -683,7 +686,7 @@ def main():
     publisher = node.create_publisher(
         topic=node.get_parameter("topic").get_parameter_value().string_value,
         msg_type=Odometry,
-        qos_profile=10,
+        qos_profile=qos_profile_system_default,
     )
 
     # test = node.create_publisher(
@@ -692,7 +695,7 @@ def main():
 
     # TF Settings
     is_publish_tf = node.get_parameter("is_publish_tf").get_parameter_value().bool_value
-    tf_publisher = tf2_ros.TransformBroadcaster(node, qos=10)
+    tf_publisher = tf2_ros.TransformBroadcaster(node, qos=qos_profile_system_default)
 
     thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     thread.start()

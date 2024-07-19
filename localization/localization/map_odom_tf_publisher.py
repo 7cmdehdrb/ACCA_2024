@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 import rclpy.duration
 import rclpy.time
+from rclpy.qos import qos_profile_system_default
 import numpy as np
 import math as m
 import tf2_ros
@@ -142,32 +143,44 @@ class Map_Odom_TF_Publisher(Node):
         # TF
 
         self.buffer = Buffer(node=self, cache_time=rclpy.duration.Duration(seconds=0.1))
-        self.tf_listener = tf2_ros.TransformListener(self.buffer, self, qos=10)
-        self.tf_publisher = tf2_ros.TransformBroadcaster(self, qos=10)
+        self.tf_listener = tf2_ros.TransformListener(
+            self.buffer, self, qos=qos_profile_system_default
+        )
+        self.tf_publisher = tf2_ros.TransformBroadcaster(
+            self, qos=qos_profile_system_default
+        )
 
         # Topic
 
         self.err_pub = self.create_publisher(
-            Float32MultiArray, "/tf_err", qos_profile=10
+            Float32MultiArray, "/tf_err", qos_profile=qos_profile_system_default
         )
 
         self.initpose_pub = self.create_publisher(
-            PoseWithCovarianceStamped, "/initialpose", qos_profile=10
+            PoseWithCovarianceStamped,
+            "/initialpose",
+            qos_profile=qos_profile_system_default,
         )
 
         self.pcl_subscriber = self.create_subscription(
             PoseWithCovarianceStamped,
             self.map_topic,
             callback=self.pcl_callback,
-            qos_profile=10,
+            qos_profile=qos_profile_system_default,
         )
 
         self.odom_subscriber = self.create_subscription(
-            Odometry, self.odom_topic, callback=self.odom_callback, qos_profile=10
+            Odometry,
+            self.odom_topic,
+            callback=self.odom_callback,
+            qos_profile=qos_profile_system_default,
         )
 
         self.score_subscriber = self.create_subscription(
-            Float32, "/pcl_score", callback=self.score_callback, qos_profile=10
+            Float32,
+            "/pcl_score",
+            callback=self.score_callback,
+            qos_profile=qos_profile_system_default,
         )
 
         # Topic Variables
@@ -230,7 +243,8 @@ class Map_Odom_TF_Publisher(Node):
         if self.linear_err < 0.1:
             self.i_err = 0.0
 
-        if self.linear_err < 1.5 and self.angular_err < 0.5 and abs(self.i_err) < 1.0:
+        # if self.linear_err < 1.5 and self.angular_err < 0.5 and abs(self.i_err) < 1.0:
+        if True:
             self.update_tf()
             self.err_stack = 0
             return
