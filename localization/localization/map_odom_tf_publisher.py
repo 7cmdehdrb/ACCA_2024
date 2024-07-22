@@ -6,8 +6,7 @@ from rclpy.qos import qos_profile_system_default
 import numpy as np
 import math as m
 import tf2_ros
-from tf2_ros.buffer import Buffer
-from tf2_ros.transform_listener import TransformListener
+from tf2_ros import Buffer, TransformListener, TransformBroadcaster
 import threading
 import time
 
@@ -143,12 +142,10 @@ class Map_Odom_TF_Publisher(Node):
         # TF
 
         self.buffer = Buffer(node=self, cache_time=rclpy.duration.Duration(seconds=0.1))
-        self.tf_listener = tf2_ros.TransformListener(
+        self.tf_listener = TransformListener(
             self.buffer, self, qos=qos_profile_system_default
         )
-        self.tf_publisher = tf2_ros.TransformBroadcaster(
-            self, qos=qos_profile_system_default
-        )
+        self.tf_publisher = TransformBroadcaster(self, qos=qos_profile_system_default)
 
         # Topic
 
@@ -230,21 +227,26 @@ class Map_Odom_TF_Publisher(Node):
 
         self.last_time = current_time
 
-        # Logic
+        self.err_pub.publish(
+            Float32MultiArray(data=[self.linear_err, self.angular_err, self.i_err])
+        )
 
-        # Absolutely Fraud Data
-        if self.score > 3.0:
-            return
+        # Logic
 
         # if time_difference > 2.0:
         #     return
 
         # reinitialize i_err (To prevent drift i_err)
-        if self.linear_err < 0.1:
-            self.i_err = 0.0
+        # if self.linear_err < 0.1:
+        #     self.i_err = 0.0
 
-        # if self.linear_err < 1.5 and self.angular_err < 0.5 and abs(self.i_err) < 1.0:
-        if True:
+        if (
+            self.linear_err < 1.5
+            and self.angular_err < 0.5
+            and abs(self.i_err) < 1.0
+            and self.score < 3.0
+        ):
+            # if True:
             self.update_tf()
             self.err_stack = 0
             return

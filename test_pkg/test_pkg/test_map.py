@@ -37,7 +37,7 @@ class TestMap(Node):
         super().__init__("test_map_node")
 
         self.map_file = "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
-        self.grid_size = 20  # m
+        self.grid_size = 25  # m
 
         self.map_publisher = self.create_publisher(
             PointCloud2, "/map", qos_profile=qos_profile_system_default
@@ -81,11 +81,17 @@ class TestMap(Node):
             x = transformed_msg.pose.pose.position.x
             y = transformed_msg.pose.pose.position.y
 
-            if self.current_x_idx != x or self.current_y_idx != y:
+            idx_x = np.searchsorted(self.x_grid, x) - 1
+            idx_y = np.searchsorted(self.y_grid, y) - 1
+
+            if self.current_x_idx != idx_x or self.current_y_idx != idx_y:
                 data = self.get_data(x, y)
 
                 if data.shape[1] != 0:
                     self.publish_pointcloud2(data=data)
+
+                    self.current_x_idx = idx_x
+                    self.current_y_idx = idx_y
 
                 else:
                     self.get_logger().warn("Cannot Find Grid")
@@ -184,9 +190,9 @@ class TestMap(Node):
         for idx in idxs:
             if (idx[0], idx[1]) in self.grids:
                 res = (
-                    np.array(self.grids[idx[0], idx[1]].data)
+                    np.array(self.grids[(idx[0], idx[1])].data)
                     if res is None
-                    else np.vstack((res, np.array(self.grids[idx[0], idx[1]].data)))
+                    else np.vstack((res, np.array(self.grids[(idx[0], idx[1])].data)))
                 )
 
         return res
@@ -200,8 +206,9 @@ class TestMap(Node):
         return res
 
     def publish_pointcloud2(self, data):
-        for _ in range(3):
-            self.map_publisher.publish(self.get_pointcloud2(data))
+        # for _ in range(3):
+        self.get_logger().info("Publish New Map")
+        self.map_publisher.publish(self.get_pointcloud2(data))
 
     def get_pointcloud2(self, rawdata):
         header = Header(frame_id="map", stamp=rclpy.time.Time().to_msg())
