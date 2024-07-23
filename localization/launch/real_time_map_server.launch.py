@@ -14,20 +14,16 @@ def generate_launch_description():
         [
             launch_ros.actions.Node(
                 package="localization",
-                executable="param_test",
-                name="param_test_node",
+                executable="real_time_map_server",
+                name="real_time_map_server_node",
                 output="screen",
                 parameters=[
                     os.path.join(
                         get_package_share_directory("localization"),
                         "params",
-                        "param_test.yaml",
+                        "real_time_map_server.yaml",
                     )
                 ],
             ),
         ]
     )
-
-
-if __name__ == "__main__":
-    generate_launch_description()

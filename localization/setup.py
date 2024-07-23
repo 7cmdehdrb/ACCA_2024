@@ -23,9 +23,9 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "param_test = localization.param_test:main",
             "kalman_localization = localization.kalman_localization:main",
             "map_odom_tf_publisher = localization.map_odom_tf_publisher:main",
+            "real_time_map_server = localization.real_time_map_server:main",
         ],
     },
 )

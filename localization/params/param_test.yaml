@@ -1,5 +1,0 @@
-param_test_node:
-  ros__parameters:
-    frequency: 30.0
-
-

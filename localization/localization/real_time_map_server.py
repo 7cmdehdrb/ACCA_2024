@@ -2,9 +2,6 @@ import rclpy
 import rclpy.duration
 from rclpy.node import Node
 from rclpy.qos import (
-    QoSProfile,
-    DurabilityPolicy,
-    qos_profile_sensor_data,
     qos_profile_system_default,
 )
 import rclpy.time
@@ -13,63 +10,80 @@ import open3d as o3d
 import numpy as np
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
-from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from tf2_geometry_msgs import PoseWithCovarianceStamped as PoseWithCovarianceStamped2
 
 
+# Grid Instance
 class Grid(object):
     def __init__(self, x, y, idx_x, idx_y):
-        self.x = x
-        self.y = y
-        self.idx_x = idx_x
-        self.idx_y = idx_y
+        self.x = x  # position x
+        self.y = y  # position y
+        self.idx_x = idx_x  # idx value: x
+        self.idx_y = idx_y  # idx value: y
         self.data = []
-
-    def __str__(self):
-        return "idx_x: {}, idx_y:{}, datas: {}\n".format(
-            self.idx_x, self.idx_y, len(self.data)
-        )
 
 
 class TestMap(Node):
     def __init__(self):
-        super().__init__("test_map_node")
+        super().__init__("real_time_map_server_node")
 
-        self.map_file = "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
-        self.grid_size = 25  # m
-
-        self.map_publisher = self.create_publisher(
-            PointCloud2, "/map", qos_profile=qos_profile_system_default
+        # Declare Param
+        self.declare_parameters(
+            namespace="",
+            parameters=[
+                (
+                    "map_file",
+                    "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd",
+                ),
+                ("grid_size", 25.0),
+                ("map_topic", "/map"),
+            ],
         )
-        self.map = self.readPCD()
 
+        self.map_file = (
+            self.get_parameter("map_file").get_parameter_value().string_value
+        )
+        self.grid_size = (
+            self.get_parameter("grid_size").get_parameter_value().double_value
+        )  # m
+
+        # Declare Publisher & Subscriber
+        self.map_publisher = self.create_publisher(
+            PointCloud2,
+            self.get_parameter("map_topic").get_parameter_value().string_value,
+            qos_profile=qos_profile_system_default,
+        )
+        self.odom_subscriber = self.create_subscription(
+            Odometry,
+            "/odometry/kalman",
+            callback=self.odom_callback,
+            qos_profile=qos_profile_system_default,
+        )
         self.buffer = Buffer(node=self, cache_time=rclpy.duration.Duration(seconds=0.1))
         self.tf_listener = TransformListener(
             self.buffer, self, qos=qos_profile_system_default
         )
 
-        # self.odom_subscriber = self.create_subscription(
-        #     Odometry,
-        #     "/odometry/kalman",
-        #     callback=self.odom_callback,
+        # self.pose_subscriber = self.create_subscription(
+        #     PoseWithCovarianceStamped,
+        #     "/initialpose",
+        #     callback=self.pose_callback,
         #     qos_profile=qos_profile_system_default,
         # )
-        self.pose_subscriber = self.create_subscription(
-            PoseWithCovarianceStamped,
-            "/initialpose",
-            callback=self.pose_callback,
-            qos_profile=qos_profile_system_default,
-        )
 
+        self.map = self.readPCD()  # entire map : asarray
+
+        # declare x range, y range, grids(dic)
         self.x_grid, self.y_grid, self.grids = self.initializeMap()
 
+        # initial_value to check movement of vehicle
         self.current_x_idx = None
         self.current_y_idx = None
 
-        # self.timer = self.create_timer(5.0, self.publish_pointcloud2)
-
+    # callback functions
     def odom_callback(self, msg):
+        # Transform odom => map
         if self.buffer.can_transform(
             "map", "odom", rclpy.time.Time(), rclpy.duration.Duration(seconds=0.1)
         ):
@@ -80,6 +94,8 @@ class TestMap(Node):
 
             x = transformed_msg.pose.pose.position.x
             y = transformed_msg.pose.pose.position.y
+
+            # Check idx is changed or not
 
             idx_x = np.searchsorted(self.x_grid, x) - 1
             idx_y = np.searchsorted(self.y_grid, y) - 1
@@ -111,6 +127,7 @@ class TestMap(Node):
         else:
             self.get_logger().warn("Cannot Find Grid")
 
+    # read entire pcd and return asarray(n, 4)
     def readPCD(self):
         try:
             map = o3d.io.read_point_cloud(
@@ -132,6 +149,7 @@ class TestMap(Node):
 
         return temp
 
+    # initialize function : devide entire map to grids
     def initializeMap(self):
         min_coords = np.min(self.map, axis=0)
         max_coords = np.max(self.map, axis=0)
@@ -179,6 +197,7 @@ class TestMap(Node):
 
         return x_grid, y_grid, grids_dic
 
+    # funtion to get asarray data with position(x, y)
     def get_data(self, x, y):
         res = None
 
@@ -197,6 +216,7 @@ class TestMap(Node):
 
         return res
 
+    # Function to make possible set of idx
     def get_possible_idx(self, idx_x, idx_y):
         res = []
         for i in range(-1, 2):
@@ -205,11 +225,12 @@ class TestMap(Node):
 
         return res
 
+    # Function to publish pointcloud2
     def publish_pointcloud2(self, data):
-        # for _ in range(3):
         self.get_logger().info("Publish New Map")
         self.map_publisher.publish(self.get_pointcloud2(data))
 
+    # Function to transform asarray to PointCloud2
     def get_pointcloud2(self, rawdata):
         header = Header(frame_id="map", stamp=rclpy.time.Time().to_msg())
 
@@ -238,7 +259,7 @@ class TestMap(Node):
         return msg
 
 
-if __name__ == "__main__":
+def main():
     rclpy.init(args=None)
 
     node = TestMap()
@@ -247,3 +268,7 @@ if __name__ == "__main__":
 
     node.destroy_node()
     rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

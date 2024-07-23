@@ -1,19 +1,17 @@
 import rclpy
+import tf2_ros
 from rclpy.node import Node
-import rclpy.duration
-import rclpy.time
+from rclpy.duration import Duration
+from rclpy.time import Time
 from rclpy.qos import qos_profile_system_default
+from tf2_ros import Buffer, TransformListener, TransformBroadcaster, TransformStamped
 import numpy as np
 import math as m
-import tf2_ros
-from tf2_ros import Buffer, TransformListener, TransformBroadcaster
-import threading
 import time
-
-from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped as PS
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
+from std_msgs.msg import Float32, Float32MultiArray, Header
+from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float32, Float32MultiArray
+from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped as PoseStamped2
 
 
 def euler_from_quaternion(quaternion):
@@ -67,6 +65,7 @@ class Map_Odom_TF_Publisher(Node):
     def __init__(self):
         super().__init__("map_odom_tf_node")
 
+        # Odomety State Instace. Odometry data => state(linear vel, angular vel)
         class Odom_State(object):
             def __init__(self):
                 self.state = [0.0, 0.0]
@@ -83,6 +82,7 @@ class Map_Odom_TF_Publisher(Node):
                 self.state = np.array([linear_vel, angular_vel])
                 self.time = time.time()
 
+        # PCL State Instance. Same with OdomState
         class PCL_State(object):
             def __init__(self):
                 self.last_pose = PoseWithCovarianceStamped()
@@ -124,11 +124,17 @@ class Map_Odom_TF_Publisher(Node):
                 self.last_pose = new_pose
                 self.last_time = current_time
 
+        # Parameters declare
         self.params = self.declare_parameters(
             namespace="",
             parameters=(
                 ("/map_topic", "/pcl_pose"),
                 ("/odom_topic", "/odometry/kalman"),
+                ("linear_err_threshold", 1.5),
+                ("angular_err_threshold", 0.5),
+                ("i_err_threshold", 1.0),
+                ("score_threshold", 3.0),
+                ("logging", True),
             ),
         )
 
@@ -140,39 +146,34 @@ class Map_Odom_TF_Publisher(Node):
         )
 
         # TF
-
-        self.buffer = Buffer(node=self, cache_time=rclpy.duration.Duration(seconds=0.1))
+        self.buffer = Buffer(node=self, cache_time=Duration(seconds=0.1))
         self.tf_listener = TransformListener(
             self.buffer, self, qos=qos_profile_system_default
         )
         self.tf_publisher = TransformBroadcaster(self, qos=qos_profile_system_default)
+        self.tf_msg = tf2_ros.TransformStamped()
 
-        # Topic
-
+        # Publisher & Subscriber
         self.err_pub = self.create_publisher(
             Float32MultiArray, "/tf_err", qos_profile=qos_profile_system_default
         )
-
         self.initpose_pub = self.create_publisher(
             PoseWithCovarianceStamped,
             "/initialpose",
             qos_profile=qos_profile_system_default,
         )
-
         self.pcl_subscriber = self.create_subscription(
             PoseWithCovarianceStamped,
             self.map_topic,
             callback=self.pcl_callback,
             qos_profile=qos_profile_system_default,
         )
-
         self.odom_subscriber = self.create_subscription(
             Odometry,
             self.odom_topic,
             callback=self.odom_callback,
             qos_profile=qos_profile_system_default,
         )
-
         self.score_subscriber = self.create_subscription(
             Float32,
             "/pcl_score",
@@ -180,29 +181,42 @@ class Map_Odom_TF_Publisher(Node):
             qos_profile=qos_profile_system_default,
         )
 
-        # Topic Variables
-
-        self.rate = self.create_rate(3.0)
-
+        # Topic Variables. Update autumatically
         self.pcl = PoseWithCovarianceStamped()
         self.odom = Odometry()
         self.score = 0.0
 
-        self.stack = 0
+        # Local Variables
+        self.err_stack = 0  # Err stack flag
+        self.linear_err = 0.0
+        self.angular_err = 0.0
+        self.i_err = 0.0
+        self.logging = self.get_parameter("logging").get_parameter_value().bool_value
+        self.last_time = time.time()
 
+        # Threshold Values
+        self.linear_err_threshold = (
+            self.get_parameter("linear_err_threshold")
+            .get_parameter_value()
+            .double_value
+        )
+        self.angular_err_threshold = (
+            self.get_parameter("angular_err_threshold")
+            .get_parameter_value()
+            .double_value
+        )
+        self.i_err_threshold = (
+            self.get_parameter("i_err_threshold").get_parameter_value().double_value
+        )
+        self.score_threshold = (
+            self.get_parameter("score_threshold").get_parameter_value().double_value
+        )
+
+        # State instance
         self.pcl_state = PCL_State()
         self.odom_state = Odom_State()
 
-        self.linear_err = 0.0
-        self.angular_err = 0.0
-
-        self.tf_msg = tf2_ros.TransformStamped()
-
-        self.last_time = time.time()
-        self.i_err = 0.0
-
-        self.err_stack = 0
-
+    # String getter
     def get_data(self):
         return "linear: {}\tangular: {}\ti_linear_err: {}\tscore: {}".format(
             round(self.linear_err, 3),
@@ -211,6 +225,28 @@ class Map_Odom_TF_Publisher(Node):
             round(self.score, 3),
         )
 
+    # Callback Functions
+    def pcl_callback(self, msg):
+        self.pcl = msg
+
+        self.pcl_state.update_state(msg)
+
+        self.update()
+
+        self.publish_tf()
+
+        if self.logging is True:
+            self.get_logger().info(self.get_data())
+
+    def odom_callback(self, msg):
+        self.odom = msg
+
+        self.odom_state.update_state(msg)
+
+    def score_callback(self, msg):
+        self.score = msg.data
+
+    # Loop function : update tf_msg with conditions
     def update(self):
         current_time = time.time()
         dt = current_time - self.last_time
@@ -237,16 +273,16 @@ class Map_Odom_TF_Publisher(Node):
         #     return
 
         # reinitialize i_err (To prevent drift i_err)
-        # if self.linear_err < 0.1:
-        #     self.i_err = 0.0
+        if self.linear_err < 0.1:
+            self.i_err = 0.0
 
+        # only update tf_msg with threshold
         if (
-            self.linear_err < 1.5
-            and self.angular_err < 0.5
-            and abs(self.i_err) < 1.0
-            and self.score < 3.0
+            self.linear_err < self.linear_err_threshold
+            and self.angular_err < self.angular_err_threshold
+            and abs(self.i_err) < self.i_err_threshold
+            and self.score < self.score_threshold
         ):
-            # if True:
             self.update_tf()
             self.err_stack = 0
             return
@@ -254,23 +290,23 @@ class Map_Odom_TF_Publisher(Node):
         self.get_logger().warn("Cannot trust TF data!")
         self.err_stack += 1
 
-        try:
-            if self.err_stack > 10:
-                if self.tf_msg.header.frame_id == "map":
-                    self.err_stack = 0
-                    self.reinitialize()
+        if self.err_stack > 10 and self.tf_msg.header.frame_id == "map":
+            self.err_stack = 0
+            self.reinitialize()
 
-        except Exception as ex:
-            self.get_logger().warn(str(ex))
-
+    # Update tf_msg via odom & pcl
     def update_tf(self):
-        tf_msg = tf2_ros.TransformStamped()
-
-        tf_msg.header.frame_id = "map"
-        tf_msg.header.stamp = rclpy.time.Time().to_msg()
-        tf_msg.child_frame_id = "odom"
-
         p1 = self.odom.pose.pose
+        p2 = self.pcl.pose.pose
+
+        self.tf_msg = TransformStamped(
+            header=Header(frame_id="map", stamp=Time().to_msg()),
+            child_frame_id="odom",
+            transform=self.calculate_transform(p1, p2),
+        )
+
+    # Calculate Transform via odom & pcl
+    def calculate_transform(self, p1, p2):
         _, _, yaw1 = euler_from_quaternion(
             [
                 p1.orientation.x,
@@ -280,7 +316,6 @@ class Map_Odom_TF_Publisher(Node):
             ]
         )
 
-        p2 = self.pcl.pose.pose
         _, _, yaw2 = euler_from_quaternion(
             [
                 p2.orientation.x,
@@ -305,15 +340,10 @@ class Map_Odom_TF_Publisher(Node):
 
         rot = quaternion_from_euler(0.0, 0.0, yaw2 - yaw1)
 
-        tf_msg.transform.translation.x = trans[0]
-        tf_msg.transform.translation.y = trans[1]
-
-        tf_msg.transform.rotation.x = rot[0]
-        tf_msg.transform.rotation.y = rot[1]
-        tf_msg.transform.rotation.z = rot[2]
-        tf_msg.transform.rotation.w = rot[3]
-
-        self.tf_msg = tf_msg
+        return Transform(
+            translation=Vector3(x=trans[0], y=trans[1], z=0.0),
+            rotation=Quaternion(x=rot[0], y=rot[1], z=rot[2], w=rot[3]),
+        )
 
     def publish_tf(self):
         self.tf_publisher.sendTransform(self.tf_msg)
@@ -322,15 +352,13 @@ class Map_Odom_TF_Publisher(Node):
         if self.buffer.can_transform(
             "map",
             "odom",
-            rclpy.time.Time(),
-            rclpy.duration.Duration(seconds=0.1),
+            Time(),
+            Duration(seconds=0.1),
         ):
-            ps_odom = PS()
-            ps_odom.header = self.odom.header
-            ps_odom.pose = self.odom.pose.pose
+            ps_odom = PoseStamped2(header=self.odom.header, pose=self.odom.pose.pose)
 
             ps_odom_on_map = self.buffer.transform(
-                ps_odom, "map", rclpy.duration.Duration(seconds=0.1)
+                ps_odom, "map", Duration(seconds=0.1)
             )
 
             pose_stamped_cov_map = PoseWithCovarianceStamped()
@@ -341,26 +369,7 @@ class Map_Odom_TF_Publisher(Node):
             self.initpose_pub.publish(pose_stamped_cov_map)
 
         else:
-            raise Exception("Cannot lookup transform")
-
-    def pcl_callback(self, msg):
-        self.pcl = msg
-
-        self.pcl_state.update_state(msg)
-
-        self.update()
-
-        self.publish_tf()
-
-        self.get_logger().info(self.get_data())
-
-    def odom_callback(self, msg):
-        self.odom = msg
-
-        self.odom_state.update_state(msg)
-
-    def score_callback(self, msg):
-        self.score = msg.data
+            self.get_logger().warn("Cannot lookup transform")
 
 
 def main():

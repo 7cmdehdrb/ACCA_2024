@@ -165,15 +165,6 @@ class Kalman(object):
 
         R = R_t + self.gps.cov + self.xsens.cov + self.erp42.cov  # Convariances
 
-        # self.node.get_logger().info(
-        #     "\ngps:{}\terp{}\txsens{}, \tdt{}".format(
-        #         round(self.gps.x[3], 3),
-        #         round(self.erp42.x[3], 3),
-        #         round(self.xsens.x[3], 3),
-        #         round(self.dt, 3),
-        #     )
-        # )
-
         x_k = np.dot(self.A, self.x) + u_k  # Predicted State
 
         P_k = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q  # Predicted Convariance
@@ -231,6 +222,17 @@ class Kalman(object):
         self.last_time = current_time
 
         return self.x, self.P
+
+    def getX(self):
+        msg = "\nX: {}\tY: {}\tYAW: {}\tV:{}\tVYAW: {}".format(
+            round(self.x[0], 3),
+            round(self.x[1], 3),
+            round(self.x[2], 3),
+            round(self.x[3], 3),
+            round(self.x[4], 3),
+        )
+
+        return msg
 
     def getOdometry(self):
         msg = Odometry()
@@ -420,10 +422,6 @@ class Ublox(Sensor):
                     [0.0, 0.0, 0.0, 0.0, 0.0],  # vyaw
                 ]
             )
-
-        # self.node.get_logger().info(
-        #     "\ndt: {}\nv: {}\ncov: {}".format(self.dt, velocity, self.cov[3][3])
-        # )
 
         self.last_position = current_point
 
@@ -662,6 +660,7 @@ def main():
                     0.0,
                 ],
             ),
+            ("logging", True),
         ],
     )
 
@@ -689,18 +688,15 @@ def main():
         qos_profile=qos_profile_system_default,
     )
 
-    # test = node.create_publisher(
-    #     topic="test", msg_type=Float64MultiArray, qos_profile=10
-    # )
-
     # TF Settings
     is_publish_tf = node.get_parameter("is_publish_tf").get_parameter_value().bool_value
     tf_publisher = tf2_ros.TransformBroadcaster(node, qos=qos_profile_system_default)
 
+    logging = node.get_parameter("logging").get_parameter_value().bool_value
+
     thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     thread.start()
 
-    # rclpy.spin_once(node)
     try:
         while rclpy.ok():
 
@@ -708,11 +704,8 @@ def main():
             odometry = kalman.getOdometry()
             publisher.publish(odometry)
 
-            # node.get_logger().info(
-            #     "\nx-yaw{}\tx-v{}\tx-vyaw{}".format(
-            #         round(x[2], 3), round(x[3], 3), round(x[4], 3)
-            #     )
-            # )
+            if logging is True:
+                node.get_logger().info(kalman.getX())
 
             if is_publish_tf is True:
                 tf_msg = kalman.getTF()
