@@ -90,7 +90,7 @@ class MapServer(Node):
 def main():
     parser = argparse.ArgumentParser(
         prog="map server",
-        description="read pcd file and publish PointCloud2",
+        description="read pcd file and publish PointCloud2\nSuch packages are required:\tnumpy==1.24.0\tscipy==1.8.0\topen3d==0.18.0",
         epilog="7cmdehdrb@naver.com",
     )
 
