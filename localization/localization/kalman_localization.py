@@ -395,7 +395,7 @@ class Ublox(Sensor):
 
         velocity = distance / self.dt if self.dt > 0.0 else self.x[3]
 
-        self.x[3] = velocity
+        self.x[3] = velocity if (velocity >= 0.0 and velocity <= 10.0) else 0.0
 
         if self.use_covariance is True:
             self.cov = np.reshape(
@@ -416,7 +416,11 @@ class Ublox(Sensor):
                         0.0,
                         0.0,
                         0.0,
-                        msg.position_covariance[0] * m.sqrt(111319.490793),
+                        (
+                            msg.position_covariance[0] * m.sqrt(111319.490793)
+                            if (velocity >= 0.0 and velocity <= 10.0)
+                            else 99.9
+                        ),
                         0.0,
                     ],  # v
                     [0.0, 0.0, 0.0, 0.0, 0.0],  # vyaw
@@ -706,6 +710,9 @@ def main():
 
             if logging is True:
                 node.get_logger().info(kalman.getX())
+                node.get_logger().info(
+                    "\n{}\t{}".format(round(gps.x[3], 3), round(erp42.x[3], 3))
+                )
 
             if is_publish_tf is True:
                 tf_msg = kalman.getTF()

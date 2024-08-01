@@ -4,7 +4,7 @@ map_odom_tf_node:
     odom_topic: "/odometry/kalman"
     logging: true
     # Threshold Params Must be DOUBLE
-    linear_err_threshold: 1.5
-    angular_err_threshold: 0.5
-    i_err_threshold: 1.0
-    score_threshold: 3.0
+    linear_err_threshold: 99.9 # 1.5
+    angular_err_threshold: 99.9 # 0.5
+    i_err_threshold: 99.9 # 1.0
+    score_threshold: 99.9 # 3.0

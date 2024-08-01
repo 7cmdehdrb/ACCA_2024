@@ -12,18 +12,27 @@
       scan_period: 0.1
       use_pcd_map: true
       map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
-      set_initial_pose: true
-      initial_pose_x: -31.77552032470703
-      initial_pose_y: -64.61795043945312
+      set_initial_pose: false
+
+      initial_pose_x: 42.999847412109375
+      initial_pose_y: -74.63196563720703
       initial_pose_z: 0.0
       initial_pose_qx: 0.0
       initial_pose_qy: 0.0
-      initial_pose_qz: -0.055078838853748896
-      initial_pose_qw: 0.9984820086063257
+      initial_pose_qz: 0.10377107833105886
+      initial_pose_qw: 0.9946012081744167
+
+      # initial_pose_x: -30.727670669555664
+      # initial_pose_y: -66.93682861328125
+      # initial_pose_z: 0.0
+      # initial_pose_qx: 0.0
+      # initial_pose_qy: 0.0
+      # initial_pose_qz: -0.05938490406231933
+      # initial_pose_qw: 0.998235159253324
       use_odom: false
       use_imu: false
       enable_debug: true
       global_frame_id: map
       odom_frame_id: odom
       base_frame_id: base_link
-      is_publish_tf: false
+      is_publish_tf: true
