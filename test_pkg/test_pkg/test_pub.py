@@ -1,12 +1,18 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
 
 
 class SimplePublisher(Node):
     def __init__(self):
         super().__init__("test_pub")
-        self.publisher_ = self.create_publisher(String, "chatter", 10)
+        qos_profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+        )
+        self.publisher_ = self.create_publisher(String, "chatter", qos_profile)
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0

@@ -3,7 +3,7 @@ kalman_localization_node:
     topic: "/odometry/kalman"
 
     is_publish_tf: true
-    logging: true
+    logging: false
 
     frame_id: "odom"
     child_frame_id: "base_link"

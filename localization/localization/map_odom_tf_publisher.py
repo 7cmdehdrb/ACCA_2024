@@ -10,6 +10,7 @@ import math as m
 import time
 from std_msgs.msg import Float32, Float32MultiArray, Header
 from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovarianceStamped
+from geometry_msgs.msg import TransformStamped as TransformStamped2
 from nav_msgs.msg import Odometry
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped as PoseStamped2
 
@@ -264,7 +265,13 @@ class Map_Odom_TF_Publisher(Node):
         self.last_time = current_time
 
         self.err_pub.publish(
-            Float32MultiArray(data=[self.linear_err, self.angular_err, self.i_err])
+            Float32MultiArray(
+                data=[
+                    self.linear_err,
+                    self.angular_err,
+                    self.i_err,
+                ]
+            )
         )
 
         # Logic
@@ -346,6 +353,7 @@ class Map_Odom_TF_Publisher(Node):
         )
 
     def publish_tf(self):
+        self.tf_msg.header = Header(frame_id="map", stamp=Time().to_msg())
         self.tf_publisher.sendTransform(self.tf_msg)
 
     def reinitialize(self):

@@ -73,16 +73,179 @@ def inv(matrix):
     return np.linalg.inv(matrix)
 
 
-class Kalman(object):
-    def __init__(self, node, gps, erp42, xsens):
-        self.node = node
+class Kalman(Node):
+    def __init__(self):
+        super().__init__("kalman_localization_node")
 
-        # Sensors
-        self.gps = gps
-        self.erp42 = erp42
-        self.xsens = xsens
+        # Declare Params
+        self.declare_parameters(
+            namespace="",
+            parameters=[
+                ("topic", "/odometry/kalman"),
+                ("is_publish_tf", True),
+                ("frame_id", "odom"),
+                ("child_frame_id", "base_link"),
+                (
+                    "noise",
+                    [
+                        0.01,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,  # x
+                        0.0,
+                        0.01,
+                        0.0,
+                        0.0,
+                        0.0,  # y
+                        0.0,
+                        0.0,
+                        0.01,
+                        0.0,
+                        0.0,  # yaw
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.01,
+                        0.0,  # v
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.01,  # vyaw
+                    ],
+                ),
+                ("gps_topic", "/ublox_gps_node/fix"),
+                ("gps_use_covariance", False),
+                (
+                    "gps_covariance",
+                    [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        99.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                    ],
+                ),
+                ("encoder_topic", "/erp42_feedback"),
+                (
+                    "encoder_covariance",
+                    [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        99.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        99.0,
+                    ],
+                ),
+                ("imu_topic", "/imu/data"),
+                ("imu_use_covariance", False),
+                (
+                    "imu_covariance",
+                    [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        99.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                    ],
+                ),
+                ("logging", True),
+            ],
+        )
+
+        # Declare Instances : GPS, ERP42, XSENS, KALMAN
+        self.gps = Ublox(
+            self,
+            NavSatFix,
+            self.get_parameter("gps_topic").get_parameter_value().string_value,
+        )
+        self.erp42 = ERP42(
+            self,
+            SerialFeedBack,
+            self.get_parameter("encoder_topic").get_parameter_value().string_value,
+        )
+        self.xsens = Xsens(
+            self,
+            Imu,
+            self.get_parameter("imu_topic").get_parameter_value().string_value,
+        )
+
+        # Topic Settings
+        self.is_publish_tf = (
+            self.get_parameter("is_publish_tf").get_parameter_value().bool_value
+        )
+        self.tf_publisher = tf2_ros.TransformBroadcaster(
+            self, qos=qos_profile_system_default
+        )
+        self.odom_publisher = self.create_publisher(
+            topic=self.get_parameter("topic").get_parameter_value().string_value,
+            msg_type=Odometry,
+            qos_profile=qos_profile_system_default,
+        )
 
         # Variables
+        self.logging = self.get_parameter("logging").get_parameter_value().bool_value
         self.last_time = time.time()
         self.dt = 0.0
 
@@ -120,15 +283,15 @@ class Kalman(object):
         )
 
         # Noise Matrix
-
         self.Q = np.reshape(
             a=np.array(
-                self.node.get_parameter("noise")
-                .get_parameter_value()
-                .double_array_value
+                self.get_parameter("noise").get_parameter_value().double_array_value
             ),
             newshape=(5, 5),
         )
+
+        # Loop
+        self.create_timer(float(1 / 30.0), callback=self.main)
 
     def filter(self):
         current_time = time.time()
@@ -238,12 +401,12 @@ class Kalman(object):
         msg = Odometry()
 
         msg.header.frame_id = (
-            self.node.get_parameter("frame_id").get_parameter_value().string_value
+            self.get_parameter("frame_id").get_parameter_value().string_value
         )
         msg.header.stamp = rclpy.time.Time().to_msg()
 
         msg.child_frame_id = (
-            self.node.get_parameter("child_frame_id").get_parameter_value().string_value
+            self.get_parameter("child_frame_id").get_parameter_value().string_value
         )
 
         msg.pose.pose.position.x = self.x[0]
@@ -269,11 +432,11 @@ class Kalman(object):
         tf_msg = tf2_ros.TransformStamped()
 
         tf_msg.header.frame_id = (
-            self.node.get_parameter("frame_id").get_parameter_value().string_value
+            self.get_parameter("frame_id").get_parameter_value().string_value
         )
         tf_msg.header.stamp = rclpy.time.Time().to_msg()
         tf_msg.child_frame_id = (
-            self.node.get_parameter("child_frame_id").get_parameter_value().string_value
+            self.get_parameter("child_frame_id").get_parameter_value().string_value
         )
 
         tf_msg.transform.translation.x = self.x[0]
@@ -287,6 +450,21 @@ class Kalman(object):
         tf_msg.transform.rotation.w = w
 
         return tf_msg
+
+    def main(self):
+        x, P = self.filter()
+        odometry = self.getOdometry()
+        self.odom_publisher.publish(odometry)
+
+        if self.logging is True:
+            self.get_logger().info(self.getX())
+            self.get_logger().info(
+                "\n{}\t{}".format(round(self.gps.x[3], 3), round(self.erp42.x[3], 3))
+            )
+
+        if self.is_publish_tf is True:
+            tf_msg = self.getTF()
+            self.tf_publisher.sendTransform(tf_msg)
 
 
 class Sensor(object):
@@ -529,203 +707,13 @@ class Xsens(Sensor):
 
 def main():
     rclpy.init(args=None)
-    node = rclpy.create_node("kalman_localization_node")
 
-    # Declare Params
-    node.declare_parameters(
-        namespace="",
-        parameters=[
-            ("topic", "/odometry/kalman"),
-            ("is_publish_tf", True),
-            ("frame_id", "odom"),
-            ("child_frame_id", "base_link"),
-            (
-                "noise",
-                [
-                    0.01,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,  # x
-                    0.0,
-                    0.01,
-                    0.0,
-                    0.0,
-                    0.0,  # y
-                    0.0,
-                    0.0,
-                    0.01,
-                    0.0,
-                    0.0,  # yaw
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.01,
-                    0.0,  # v
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.01,  # vyaw
-                ],
-            ),
-            ("gps_topic", "/ublox_gps_node/fix"),
-            ("gps_use_covariance", False),
-            (
-                "gps_covariance",
-                [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    99.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ],
-            ),
-            ("encoder_topic", "/erp42_feedback"),
-            (
-                "encoder_covariance",
-                [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    99.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    99.0,
-                ],
-            ),
-            ("imu_topic", "/imu/data"),
-            ("imu_use_covariance", False),
-            (
-                "imu_covariance",
-                [
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    99.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ],
-            ),
-            ("logging", True),
-        ],
-    )
+    node = Kalman()
 
-    # Declare Instances : GPS, ERP42, XSENS, KALMAN
-    gps = Ublox(
-        node,
-        NavSatFix,
-        node.get_parameter("gps_topic").get_parameter_value().string_value,
-    )
-    erp42 = ERP42(
-        node,
-        SerialFeedBack,
-        node.get_parameter("encoder_topic").get_parameter_value().string_value,
-    )
-    xsens = Xsens(
-        node,
-        Imu,
-        node.get_parameter("imu_topic").get_parameter_value().string_value,
-    )
-    kalman = Kalman(node=node, gps=gps, erp42=erp42, xsens=xsens)
+    rclpy.spin(node)
 
-    publisher = node.create_publisher(
-        topic=node.get_parameter("topic").get_parameter_value().string_value,
-        msg_type=Odometry,
-        qos_profile=qos_profile_system_default,
-    )
-
-    # TF Settings
-    is_publish_tf = node.get_parameter("is_publish_tf").get_parameter_value().bool_value
-    tf_publisher = tf2_ros.TransformBroadcaster(node, qos=qos_profile_system_default)
-
-    logging = node.get_parameter("logging").get_parameter_value().bool_value
-
-    thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
-    thread.start()
-
-    try:
-        while rclpy.ok():
-
-            x, P = kalman.filter()
-            odometry = kalman.getOdometry()
-            publisher.publish(odometry)
-
-            if logging is True:
-                node.get_logger().info(kalman.getX())
-                node.get_logger().info(
-                    "\n{}\t{}".format(round(gps.x[3], 3), round(erp42.x[3], 3))
-                )
-
-            if is_publish_tf is True:
-                tf_msg = kalman.getTF()
-                tf_publisher.sendTransform(tf_msg)
-
-            time.sleep(1.0 / 30.0)
-
-    except Exception as ex:
-        node.get_logger().warn(str(ex))
-
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":

@@ -10,13 +10,14 @@ import argparse
 
 
 class MapServer(Node):
-    def __init__(self, file, topic, frame, hz):
+    def __init__(self, file, topic, frame, rate, downsample):
         super().__init__("map_server_node")
 
         self.file = file
         self.topic = topic
         self.frame = frame
-        self.hz = int(hz)
+        self.rate = int(rate)
+        self.downsample = downsample
 
         # Publisher
         self.map_pub = self.create_publisher(
@@ -25,11 +26,11 @@ class MapServer(Node):
 
         self.map = self.readPCD()
 
-        if self.hz == 0:
+        if self.rate == 0:
             self.publish_pointcloud2()
         else:
             self.create_timer(
-                timer_period_sec=(1.0 / float(self.hz)),
+                timer_period_sec=rate,
                 callback=self.publish_pointcloud2,
             )
 
@@ -40,6 +41,9 @@ class MapServer(Node):
                 self.file,
                 format="pcd",
             )
+
+            if self.downsample != 0.0:
+                map = map.voxel_down_sample(voxel_size=self.downsample)
 
             map_np = np.asarray(map.points)
 
@@ -107,22 +111,30 @@ def main():
         default="map",
     )
     parser.add_argument(
-        "-hz",
-        "--hz",
+        "-r",
+        "--rate",
         type=int,
         required=False,
-        help="Published hz. default to 0(publish once)",
+        help="Published rate. default to 0(publish once)",
         default=0,
+    )
+    parser.add_argument(
+        "-d",
+        "--downsample",
+        type=float,
+        required=False,
+        help="Downsample voxel size. default to 0.0(Not downsampling)",
+        default=0.0,
     )
     args = parser.parse_args()
 
     file = args.file
     topic = args.topic
     frame = args.frame
-    hz = args.hz
+    rate = args.rate
 
     rclpy.init(args=None)
-    node = MapServer(file, topic, frame, hz)
+    node = MapServer(file, topic, frame, rate)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

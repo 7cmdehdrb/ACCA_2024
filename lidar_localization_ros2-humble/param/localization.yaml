@@ -11,7 +11,10 @@
       scan_min_range: 1.0
       scan_period: 0.1
       use_pcd_map: true
+      
+      # map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/2023_kcity.pcd"
       map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
+      
       set_initial_pose: false
 
       initial_pose_x: 42.999847412109375
@@ -29,10 +32,11 @@
       # initial_pose_qy: 0.0
       # initial_pose_qz: -0.05938490406231933
       # initial_pose_qw: 0.998235159253324
+      
       use_odom: false
       use_imu: false
       enable_debug: true
       global_frame_id: map
       odom_frame_id: odom
       base_frame_id: base_link
-      is_publish_tf: true
+      is_publish_tf: false
