@@ -1,11 +1,9 @@
 import numpy as np
 
 
-a = np.array([[0, 1, 2]])
-b = np.array([[3, 4, 5]])
-c = np.array([[6, 7, 8]])
+a = np.array([0.0, 0.0])
+b = np.array([1.0, 0.0])
 
-print(a + b + c)
-print(np.vstack((a, b, c)))
+print(np.linalg.norm(a, ord=1))
 
-print(list(range(-1, 2)))
+print(np.dot(a, b))

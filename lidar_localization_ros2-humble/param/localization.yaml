@@ -15,23 +15,23 @@
       # map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/2023_kcity.pcd"
       map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
       
-      set_initial_pose: false
+      set_initial_pose: true
 
-      initial_pose_x: 42.999847412109375
-      initial_pose_y: -74.63196563720703
-      initial_pose_z: 0.0
-      initial_pose_qx: 0.0
-      initial_pose_qy: 0.0
-      initial_pose_qz: 0.10377107833105886
-      initial_pose_qw: 0.9946012081744167
-
-      # initial_pose_x: -30.727670669555664
-      # initial_pose_y: -66.93682861328125
+      # initial_pose_x: 42.999847412109375
+      # initial_pose_y: -74.63196563720703
       # initial_pose_z: 0.0
       # initial_pose_qx: 0.0
       # initial_pose_qy: 0.0
-      # initial_pose_qz: -0.05938490406231933
-      # initial_pose_qw: 0.998235159253324
+      # initial_pose_qz: 0.10377107833105886
+      # initial_pose_qw: 0.9946012081744167
+
+      initial_pose_x: -30.727670669555664
+      initial_pose_y: -66.93682861328125
+      initial_pose_z: 0.0
+      initial_pose_qx: 0.0
+      initial_pose_qy: 0.0
+      initial_pose_qz: -0.05938490406231933
+      initial_pose_qw: 0.998235159253324
       
       use_odom: false
       use_imu: false

@@ -1,0 +1,10 @@
+map_odom_tf_node:
+  ros__parameters:
+    map_topic: "/pcl_pose"
+    odom_topic: "/odometry/kalman"
+    logging: false
+    # Threshold Params Must be DOUBLE
+    linear_err_threshold: 999.9 # 1.5
+    angular_err_threshold: 999.9 # 0.5
+    angle_difference_threshold: 999.9 # 1.0
+    score_threshold: 999.9 # 3.0
