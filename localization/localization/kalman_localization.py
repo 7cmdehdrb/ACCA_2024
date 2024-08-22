@@ -19,8 +19,18 @@ from geometry_msgs.msg import Point
 from nav_msgs.msg import Odometry
 
 
-# Functions
+class Normalizaor(object):
+    def __init__(self):
+        self.last_value = 0.0
+        self.value = 0.0
 
+    def filter(self, value):
+        self.value = value
+
+        if abs(self.value - self.last_value) > m.pi:
+            if self.last_value < 0.0:
+                self.value -= 2
+                    
 
 def euler_from_quaternion(quaternion):
     """
@@ -669,6 +679,8 @@ class Xsens(Sensor):
 
         self.initial_yaw = None
 
+        self.angle_normalizor = Normalizaor()
+
     def callback(self, msg):
         # Callback Function: yaw
 
@@ -680,7 +692,8 @@ class Xsens(Sensor):
         if self.initial_yaw is None:
             self.initial_yaw = yaw
 
-        yaw = yaw - self.initial_yaw
+        yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
+        self.node.get_logger().info(str(yaw))
 
         self.x[2] = yaw
 
