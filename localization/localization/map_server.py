@@ -132,9 +132,10 @@ def main():
     topic = args.topic
     frame = args.frame
     rate = args.rate
+    downsample = args.downsample
 
     rclpy.init(args=None)
-    node = MapServer(file, topic, frame, rate)
+    node = MapServer(file, topic, frame, rate, downsample)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
