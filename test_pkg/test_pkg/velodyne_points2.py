@@ -21,6 +21,7 @@ class VelodynePoints2(object):
 
     def callback(self, msg):
         msg.header.stamp = rclpy.time.Time().to_msg()
+        msg.header.frame_id = "base_link"
         self.publisher.publish(msg)
 
 
