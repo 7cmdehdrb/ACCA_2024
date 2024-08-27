@@ -88,7 +88,6 @@ class MatchingChecker(Node):
 
         self.current_time = time.time()
         self.last_time = time.time()
-        self.dt = 0.0
         
         self.data = [99.9, 99.9]
         self.score = 99.9
@@ -112,53 +111,23 @@ class MatchingChecker(Node):
             qos_profile=qos_profile_system_default,
         )
 
-        self.predicted_pub = self.create_publisher(
-            PoseWithCovarianceStamped,
-            "/predicted_pcl",
-            qos_profile=qos_profile_system_default,
-        )
         self.initpose_pub = self.create_publisher(
             PoseWithCovarianceStamped,
             "/initialpose",
             qos_profile=qos_profile_system_default,
         )
 
-        self.test_pub = self.create_publisher(
-            Float32MultiArray, "/test", qos_profile=qos_profile_system_default
-        )
-        self.backup_sub = self.create_subscription(
-            Empty, "/backup", qos_profile=qos_profile_system_default, callback=self.backup_callback
-        )
-        self.rollback_sub = self.create_subscription(
-            Empty, "/rollback", qos_profile=qos_profile_system_default, callback=self.rollback_callback
-        )
-
         # TF
         self.buffer = Buffer(node=self, cache_time=Duration(seconds=0.1))
         self.tf_listener = TransformListener(self.buffer, self, qos=qos_profile_system_default)            
         self.tf_publisher = TransformBroadcaster(self, qos=qos_profile_system_default)
-        self.tf_msg = TransformStamped(
-            # header=Header(frame_id="map", stamp=Time().to_msg()), 
-            # child_frame_id="odom"
-            )
+        self.tf_msg = TransformStamped()
         
-        self.queue = Queue(init=True, length=15)
-        self.backup_tf = None
+        self.queue_length = 15
+        self.queue = Queue(init=True, length=self.queue_length)
         self.reinitialize_count = 0
 
         self.reinitialize_time = time.time()
-
-    def backup_callback(self, msg):
-        self.backup_tf = TransformStamped()
-        self.backup_tf.transform = self.tf_msg.transform
-        self.get_logger().info("Set default TF")
-
-    def rollback_callback(self, msg):
-        if self.backup_tf is not None:
-            self.tf_msg.transform = self.backup_tf.transform
-            self.get_logger().info("Force rollback")
-        else:
-            self.get_logger().warn("Cannot find default TF")
 
     def score_callback(self, msg):
         self.score = msg.data
@@ -184,17 +153,16 @@ class MatchingChecker(Node):
         
         self.queue.inputValue(validation)
 
-        self.test_pub.publish(Float32MultiArray(data=self.data))
-        
-        if self.queue.isTrue(threshhold=15):
-            self.update_tf()
-            self.reinitialize_count = 0
-            self.get_logger().info("Update TF")
+        self.get_logger().info("Trust score: {}".format(str(round(self.queue.count(True) / self.queue_length, 3))))
 
-        elif self.queue.isFalse(threshhold=15):
+        if self.queue.isTrue(threshhold=self.queue_length):
+            self.update_tf()
+            self.get_logger().info("Valid TF. Updating...")
+
+        elif self.queue.isFalse(threshhold=self.queue_length):
             reinitialize_dt = time.time() - self.reinitialize_time
 
-            if reinitialize_dt > 5.0:
+            if reinitialize_dt > 3.0:
                 self.reinitialize()
                 self.reinitialize_time = time.time()
 
@@ -209,8 +177,6 @@ class MatchingChecker(Node):
             (self.odom.twist.twist.linear.x**2) + (self.odom.twist.twist.linear.y**2)
         )
         odom_angular_vel = self.odom.twist.twist.angular.z
-
-        # self.get_logger().info(str(odom_linear_vel))
 
         predicted_pcl_pose = PoseWithCovarianceStamped()
         predicted_pcl_pose.header = Header(frame_id="map", stamp=Time().to_msg())
@@ -251,19 +217,26 @@ class MatchingChecker(Node):
 
         new_tf = self.calculate_transform(p1, p2)
 
-        # dx = new_tf.translation.x - self.tf_msg.transform.translation.x
-        # dy = new_tf.translation.y - self.tf_msg.transform.translation.y
+        dx = new_tf.translation.x - self.tf_msg.transform.translation.x
+        dy = new_tf.translation.y - self.tf_msg.transform.translation.y
 
-        # ds = m.sqrt((dx ** 2) + (dy ** 2))
+        ds = m.sqrt((dx ** 2) + (dy ** 2))
 
-        # if (ds > 20. and self.tf_msg.child_frame_id == "odom"):
-        #     self.get_logger().warn("detected invalid tf: {}, {}".format(round(dx, 3), round(dy, 3)))
-        #     self.queue.inputValue(False)
+        if self.tf_msg.child_frame_id == "odom":
+            if ds > 20.:
+                if self.reinitialize_count <= 5:
+                    self.get_logger().warn("Detected invalid TF. Ignoring updated TF.")
+                    self.queue.inputValue(False)
+                    self.reinitialize_count += 1
+                    return
             
-        #     return
+                elif self.reinitialize_count > 5:
+                    self.reinitialize_count = 0
 
-        # self.get_logger().info("{}\t{}".format(dx, dy))
-        
+            else:
+                # correct tf. reinitalcount reset
+                self.reinitialize_count = 0
+
         self.tf_msg = TransformStamped(
             header=Header(frame_id="map", stamp=Time().to_msg()),
             child_frame_id="odom",
