@@ -101,10 +101,14 @@ class MatchingChecker(Node):
         self.test_pub.publish(
             Float32MultiArray(
                 data=[
-                    self.predicted_pcl.pose.pose.position.x
-                    - self.pcl.pose.pose.position.x,
-                    self.predicted_pcl.pose.pose.position.y
-                    - self.pcl.pose.pose.position.y,
+                    abs(
+                        self.predicted_pcl.pose.pose.position.x
+                        - self.pcl.pose.pose.position.x
+                    ),
+                    abs(
+                        self.predicted_pcl.pose.pose.position.y
+                        - self.pcl.pose.pose.position.y
+                    ),
                 ]
             )
         )

@@ -12,8 +12,8 @@
       scan_period: 0.1
       use_pcd_map: true
       
-      # map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/2023_kcity.pcd"
-      map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
+      map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/2023_kcity.pcd"
+      # map_path: "/home/acca/catkin_ws/src/lidar_localization_ros2-humble/resource/GlobalMap.pcd"
       
       set_initial_pose: true
 
