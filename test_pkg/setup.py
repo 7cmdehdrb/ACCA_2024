@@ -30,6 +30,7 @@ setup(
             "velodyne_tf = test_pkg.velodyne_tf:main",
             "tf_test = test_pkg.tf_test:main",
             "tf_test3 = test_pkg.tf_test3:main",
+            "matching_check = test_pkg.matching_check:main"
         ],
     },
 )

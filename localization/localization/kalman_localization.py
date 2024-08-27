@@ -692,8 +692,9 @@ class Xsens(Sensor):
         if self.initial_yaw is None:
             self.initial_yaw = yaw
 
-        yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
-        self.node.get_logger().info(str(yaw))
+        # yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
+        # self.node.get_logger().info(str(yaw))
+        yaw = yaw - self.initial_yaw
 
         self.x[2] = yaw
 
