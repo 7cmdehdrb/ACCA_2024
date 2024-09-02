@@ -55,7 +55,7 @@ class GPS(Node):
             p.y = y - self.init_point.y
 
             point_stamp = PointStamped()
-            point_stamp.header.frame_id = "map"
+            point_stamp.header.frame_id = "odom"
             point_stamp.header.stamp = rclpy.time.Time().to_msg()
             point_stamp.point = p
 

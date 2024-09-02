@@ -1,6 +1,7 @@
 import rclpy
+import rclpy.duration
 from rclpy.node import Node
-from rclpy.qos import qos_profile_system_default
+from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data
 import rclpy.logging
 import rclpy.time
 import tf2_ros
@@ -220,7 +221,7 @@ class Kalman(Node):
                         0.0,
                     ],
                 ),
-                ("logging", True),
+                ("logging", False),
             ],
         )
 
@@ -485,7 +486,7 @@ class Sensor(object):
 
         # Subscriber
         self.subscriber = self.node.create_subscription(
-            dtype, topic, self.callback, qos_profile_system_default
+            dtype, topic, self.callback, qos_profile_sensor_data
         )
 
         # Sensing Data
@@ -551,9 +552,10 @@ class Ublox(Sensor):
         self.tm = pyproj.CRS("epsg:2097")  # m
         self.transformer = pyproj.Transformer.from_crs(self.gps, self.tm)
 
+        self.last_stamp = None
         self.last_position = None
-        self.last_time = time.time()
         self.dt = 0.0
+
 
     def calculateDistance(self, p1, p2):
         return m.sqrt(((p1.x - p2.x) ** 2) + ((p1.y - p2.y) ** 2))
@@ -561,9 +563,7 @@ class Ublox(Sensor):
     def callback(self, msg):
         # Callback Function: transform latitude & longitude to v
 
-        current_time = time.time()
-        self.dt = current_time - self.last_time
-        self.last_time = current_time
+        current_stamp = msg.header.stamp
 
         # msg = NavSatFix()
         lat = msg.latitude
@@ -575,13 +575,22 @@ class Ublox(Sensor):
         p.y = y
         current_point = p
 
-        if self.last_position is None:
+        if self.last_position is None or self.last_stamp is None:
+            self.last_stamp = current_stamp
             self.last_position = current_point
+            return
+
+        # else:
+        #     self.dt = (rclpy.time.Time.from_msg(current_stamp) - rclpy.time.Time.from_msg(self.last_stamp)).nanoseconds * 10e-10
+        #     print(self.dt)
+        self.dt = 0.125
 
         distance = self.calculateDistance(self.last_position, current_point)
         distance = distance if distance > 0.012 else 0.0
 
         velocity = distance / self.dt if self.dt > 0.0 else self.x[3]
+
+        # self.node.get_logger().info("{}, {}, {}".format(round(velocity, 3), round(distance, 3), round(self.dt, 5)))
 
         self.x[3] = velocity if (velocity >= 0.0 and velocity <= 10.0) else 0.0
 
@@ -615,6 +624,7 @@ class Ublox(Sensor):
                 ]
             )
 
+        self.last_stamp = current_stamp
         self.last_position = current_point
 
 
