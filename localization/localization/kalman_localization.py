@@ -20,19 +20,6 @@ from geometry_msgs.msg import Point
 from nav_msgs.msg import Odometry
 
 
-class Normalizaor(object):
-    def __init__(self):
-        self.last_value = 0.0
-        self.value = 0.0
-
-    def filter(self, value):
-        self.value = value
-
-        if abs(self.value - self.last_value) > m.pi:
-            if self.last_value < 0.0:
-                self.value -= 2
-                    
-
 def euler_from_quaternion(quaternion):
     """
     Converts quaternion (w in last place) to euler roll, pitch, yaw
@@ -84,6 +71,49 @@ def inv(matrix):
     return np.linalg.inv(matrix)
 
 
+class Normalizaor(object):
+    def __init__(self):
+        self.last_value = 0.0
+        self.value = 0.0
+
+    def filter(self, value):
+        self.value = value
+
+        while abs(self.value - self.last_value) > m.pi:
+            if self.last_value < 0.0:
+                self.value -= 2 * m.pi
+            elif self.last_value > 0.0:
+                self.value += 2 * m.pi
+
+        self.last_value = self.value
+
+        return self.value
+
+
+class Gaussian(object):
+    def __init__(self, x, mean, sigma):
+        self.x = x
+        self.mean = mean
+        self.sigma = sigma
+
+        if x is not None:
+            self.value = self.calculateGaussian()
+
+    def calculateGaussian(self):
+        return (1 / np.sqrt(2.0 * m.pi * self.sigma**2.0)) * np.exp(
+            -((self.x - self.mean) ** 2.0) / (2.0 * self.sigma**2)
+        )
+
+
+def gaussianConvolution(g1, g2):
+    mean = g1.mean + (g1.sigma**2 * (g2.mean - g1.mean)) / (g1.sigma**2 + g2.sigma**2)
+    if g1.sigma == g2.sigma:
+        sigma = g1.sigma
+    else:
+        sigma = 2.0 * (g1.sigma**2 - (g1.sigma**4) / (g1.sigma**2 - g2.sigma**2))
+    return Gaussian(g1.x, mean, abs(sigma))
+
+
 class Kalman(Node):
     def __init__(self):
         super().__init__("kalman_localization_node")
@@ -92,7 +122,7 @@ class Kalman(Node):
         self.declare_parameters(
             namespace="",
             parameters=[
-                ("topic", "/odometry/kalman"),
+                ("topic", "/odometry/kalman_test"),
                 ("is_publish_tf", True),
                 ("frame_id", "odom"),
                 ("child_frame_id", "base_link"),
@@ -149,7 +179,7 @@ class Kalman(Node):
                         0.0,
                         0.0,
                         0.0,
-                        99.0,
+                        99.9,
                         0.0,
                         0.0,
                         0.0,
@@ -180,13 +210,13 @@ class Kalman(Node):
                         0.0,
                         0.0,
                         0.0,
-                        99.0,
+                        0.3,
                         0.0,
                         0.0,
                         0.0,
                         0.0,
                         0.0,
-                        99.0,
+                        0.3,
                     ],
                 ),
                 ("imu_topic", "/imu/data"),
@@ -212,7 +242,7 @@ class Kalman(Node):
                         0.0,
                         0.0,
                         0.0,
-                        99.0,
+                        0.1,
                         0.0,
                         0.0,
                         0.0,
@@ -337,7 +367,10 @@ class Kalman(Node):
             ]
         )
 
-        R = R_t + self.gps.cov + self.xsens.cov + self.erp42.cov  # Convariances
+        gps_erp_x, gps_erp_cov = fusion_gps_erp(self.gps, self.erp42)
+
+        # R = R_t + self.gps.cov + self.xsens.cov + self.erp42.cov  # Convariances
+        R = R_t + self.xsens.cov + gps_erp_cov  # Convariances
 
         x_k = np.dot(self.A, self.x) + u_k  # Predicted State
 
@@ -350,30 +383,36 @@ class Kalman(Node):
             S_gps,
         )
 
-        S_xsens = inv(np.dot(np.dot(self.xsens.H, P_k), self.xsens.H.T) + R)
-        K_xsens = np.dot(
-            np.dot(P_k, self.xsens.H.T),
-            S_xsens,
-        )
-
         S_erp42 = inv(np.dot(np.dot(self.erp42.H, P_k), self.erp42.H.T) + R)
         K_erp42 = np.dot(
             np.dot(P_k, self.erp42.H.T),
             S_erp42,
         )
 
-        K = (
-            np.dot(K_gps, inv(S_gps))
-            + np.dot(K_xsens, inv(S_xsens))
-            + np.dot(K_erp42, inv(S_erp42))
+        S_xsens = inv(np.dot(np.dot(self.xsens.H, P_k), self.xsens.H.T) + R)
+        K_xsens = np.dot(
+            np.dot(P_k, self.xsens.H.T),
+            S_xsens,
         )
 
+        # K = (
+        #     np.dot(K_gps, inv(S_gps))
+        #     + np.dot(K_xsens, inv(S_xsens))
+        #     + np.dot(K_erp42, inv(S_erp42))
+        # )
+        K = +np.dot(K_xsens, inv(S_xsens)) + np.dot(K_erp42, inv(S_erp42))
+
         # Updated X
+        # X = (
+        #     x_k
+        #     + np.dot(K_gps, (self.gps.x - np.dot(self.gps.H, x_k)))
+        #     + np.dot(K_xsens, (self.xsens.x - np.dot(self.xsens.H, x_k)))
+        #     + np.dot(K_erp42, (self.erp42.x - np.dot(self.erp42.H, x_k)))
+        # )
         X = (
             x_k
-            + np.dot(K_gps, (self.gps.x - np.dot(self.gps.H, x_k)))
             + np.dot(K_xsens, (self.xsens.x - np.dot(self.xsens.H, x_k)))
-            + np.dot(K_erp42, (self.erp42.x - np.dot(self.erp42.H, x_k)))
+            + np.dot(K_erp42, (gps_erp_x - np.dot(self.erp42.H, x_k)))
         )
         self.x = X
 
@@ -476,6 +515,35 @@ class Kalman(Node):
         if self.is_publish_tf is True:
             tf_msg = self.getTF()
             self.tf_publisher.sendTransform(tf_msg)
+
+
+def fusion_gps_erp(gps, erp):
+    gps_gaussian = Gaussian(None, gps.x[3], gps.cov[3][3])
+    erp_gaussian = Gaussian(None, erp.x[3], erp.cov[3][3])
+
+    convolution_gaussian = gaussianConvolution(gps_gaussian, erp_gaussian)
+
+    new_x = np.array(
+        [
+            0.0,  # x
+            0.0,  # y
+            0.0,  # yaw
+            convolution_gaussian.mean,  # v
+            erp.x[4],  # vyaw
+        ]
+    )
+
+    new_cov = np.array(
+        [
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, convolution_gaussian.sigma, 0.0],
+            [0.0, 0.0, 0.0, 0.0, erp.cov[4][4]],
+        ]
+    )
+
+    return new_x, new_cov
 
 
 class Sensor(object):
@@ -702,9 +770,7 @@ class Xsens(Sensor):
         if self.initial_yaw is None:
             self.initial_yaw = yaw
 
-        # yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
-        # self.node.get_logger().info(str(yaw))
-        yaw = yaw - self.initial_yaw
+        yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
 
         self.x[2] = yaw
 
