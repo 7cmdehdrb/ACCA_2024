@@ -1,9 +1,7 @@
-import numpy as np
+import rclpy
+from rclpy.time import Time
 
 
-a = np.array([0.0, 0.0])
-b = np.array([1.0, 0.0])
 
-print(np.linalg.norm(a, ord=1))
 
-print(np.dot(a, b))
+print(Time().to_msg().nanosec)
