@@ -336,6 +336,8 @@ class Kalman(Node):
     def filter(self):
         current_time = time.time()
 
+        self.dt = current_time - self.last_time
+
         self.A = np.array(
             [
                 [1, 0, 0, m.cos(self.x[2]) * self.dt, 0],  # x
@@ -430,7 +432,6 @@ class Kalman(Node):
         self.P[0][0] = 0.1
         self.P[1][1] = 0.1
 
-        self.dt = current_time - self.last_time
         self.last_time = current_time
 
         return self.x, self.P
