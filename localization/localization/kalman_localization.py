@@ -89,6 +89,21 @@ class Normalizaor(object):
 
         return self.value
 
+    def dfilter(self, value):
+        dvalue = value - self.last_value
+
+        if self.value == 0.0:
+            self.value = value
+            self.last_value = self.value
+            return self.value
+
+        if abs(dvalue) < 0.015:
+            self.value += dvalue
+
+        self.last_value = value
+
+        return self.value
+
 
 class Gaussian(object):
     def __init__(self, x, mean, sigma):
@@ -179,7 +194,7 @@ class Kalman(Node):
                         0.0,
                         0.0,
                         0.0,
-                        99.9,
+                        0.3,
                         0.0,
                         0.0,
                         0.0,
@@ -251,7 +266,7 @@ class Kalman(Node):
                         0.0,
                     ],
                 ),
-                ("logging", False),
+                ("logging", True),
             ],
         )
 
@@ -471,11 +486,16 @@ class Kalman(Node):
 
         msg.pose.covariance[0] = self.P[0][0]
         msg.pose.covariance[7] = self.P[1][1]
+        msg.pose.covariance[35] = self.P[2][2]
 
         msg.twist.twist.linear.x = self.x[3] * m.cos(self.x[2])
         msg.twist.twist.linear.y = self.x[3] * m.sin(self.x[2])
 
         msg.twist.twist.angular.z = self.x[4]
+
+        msg.twist.covariance[0] = self.P[3][3]  # linear x 0-5
+        msg.twist.covariance[7] = self.P[3][3]  # linear y 6-11
+        msg.twist.covariance[35] = self.P[4][4]  # angular z 30
 
         return msg
 
@@ -511,6 +531,9 @@ class Kalman(Node):
             self.get_logger().info(self.getX())
             self.get_logger().info(
                 "\n{}\t{}".format(round(self.gps.x[3], 3), round(self.erp42.x[3], 3))
+            )
+            self.get_logger().info(
+                "\n{}\t{}".format(round(self.x[2], 3), round(self.xsens.x[2], 3))
             )
 
         if self.is_publish_tf is True:
@@ -625,7 +648,6 @@ class Ublox(Sensor):
         self.last_position = None
         self.dt = 0.0
 
-
     def calculateDistance(self, p1, p2):
         return m.sqrt(((p1.x - p2.x) ** 2) + ((p1.y - p2.y) ** 2))
 
@@ -652,6 +674,7 @@ class Ublox(Sensor):
         # else:
         #     self.dt = (rclpy.time.Time.from_msg(current_stamp) - rclpy.time.Time.from_msg(self.last_stamp)).nanoseconds * 10e-10
         #     print(self.dt)
+
         self.dt = 0.125
 
         distance = self.calculateDistance(self.last_position, current_point)
@@ -771,7 +794,9 @@ class Xsens(Sensor):
         if self.initial_yaw is None:
             self.initial_yaw = yaw
 
-        yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
+        # yaw = self.angle_normalizor.filter(yaw - self.initial_yaw)
+        yaw = self.angle_normalizor.dfilter(yaw - self.initial_yaw)
+        # yaw = yaw - self.initial_yaw
 
         self.x[2] = yaw
 
@@ -785,15 +810,16 @@ class Xsens(Sensor):
                 newshape=(5, 5),
             )
 
-        self.cov = np.array(
-            [
-                [0.0, 0.0, 0.0, 0.0, 0.0],  # x
-                [0.0, 0.0, 0.0, 0.0, 0.0],  # y
-                [0.0, 0.0, msg.orientation_covariance[0], 0.0, 0.0],  # yaw
-                [0.0, 0.0, 0.0, 0.0, 0.0],  # v
-                [0.0, 0.0, 0.0, 0.0, 0.0],  # vyaw
-            ]
-        )
+        else:
+            self.cov = np.array(
+                [
+                    [0.0, 0.0, 0.0, 0.0, 0.0],  # x
+                    [0.0, 0.0, 0.0, 0.0, 0.0],  # y
+                    [0.0, 0.0, msg.orientation_covariance[0], 0.0, 0.0],  # yaw
+                    [0.0, 0.0, 0.0, 0.0, 0.0],  # v
+                    [0.0, 0.0, 0.0, 0.0, 0.0],  # vyaw
+                ]
+            )
 
 
 def main():

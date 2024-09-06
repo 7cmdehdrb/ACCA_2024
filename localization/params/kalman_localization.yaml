@@ -4,7 +4,7 @@ kalman_localization_node:
 
     is_publish_tf: true
     logging: true
-
+    
     frame_id: "odom"
     child_frame_id: "base_link"
 
@@ -19,12 +19,12 @@ kalman_localization_node:
 
     gps_topic: "/ublox_gps_node/fix"
     # If this value is true, it will use gps_covariance as sensor covariance. Else, it will use sensor covariance
-    gps_use_covariance: true 
+    gps_use_covariance: false 
     gps_covariance: [
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 999.9, 0.0,
+                    0.0, 0.0, 0.0, 0.3, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     ]
 
@@ -33,8 +33,8 @@ kalman_localization_node:
                         0.0, 0.0, 0.0, 0.0, 0.0,
                         0.0, 0.0, 0.0, 0.0, 0.0,
                         0.0, 0.0, 0.0, 0.0, 0.0,
-                        0.0, 0.0, 0.0, 0.01, 0.0,
-                        0.0, 0.0, 0.0, 0.0, 0.01,
+                        0.0, 0.0, 0.0, 0.1, 0.0,
+                        0.0, 0.0, 0.0, 0.0, 0.1,
                         ]
 
     imu_topic: "/imu/data"
@@ -43,6 +43,6 @@ kalman_localization_node:
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0, 99.0, 0.0,
+                    0.0, 0.0, 0.0, 0.3, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0,
                     ]

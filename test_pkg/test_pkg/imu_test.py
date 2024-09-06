@@ -1,7 +1,9 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
+from rclpy.qos import qos_profile_system_default
 from sensor_msgs.msg import Imu
+from std_msgs.msg import Float32MultiArray
 import numpy as np
 import math as m
 import random
@@ -72,6 +74,24 @@ class Normalizaor(object):
 
         return self.value
 
+    def dfilter(self, value):
+        dvalue = value - self.last_value
+
+        if self.value == 0.0:
+            self.value = value
+            self.last_value = self.value
+            return self.value
+
+        if abs(dvalue) < 0.015:
+            self.value += dvalue
+
+        else:
+            print(dvalue)
+
+        self.last_value = value
+
+        return self.value
+
 
 def test(value):
     if value < -m.pi:
@@ -87,28 +107,28 @@ class ImuTest(Node):
     def __init__(self):
         super().__init__("feedback_odom_converter")
         self.nomalizor = Normalizaor()
+        self.test_normalizor = Normalizaor()
         self.imu_subscriber = self.create_subscription(
             Imu, "/imu/data", self.callback, 10
         )
-        self.timer = self.create_timer(0.5, self.timer_callback)
+        self.float_publisher = self.create_publisher(
+            Float32MultiArray, "/test", qos_profile=qos_profile_system_default
+        )
 
         self.yaw = 0.0
-
-    def timer_callback(self):
-        # random_yaw = random.randint(-314, 314) * 10e-3
-        # self.yaw = self.nomalizor.filter(random_yaw)
-        test_value = self.yaw - 0.5
-        test_value = test(test_value)
-        self.yaw = self.nomalizor.filter(test_value)
-        print(test_value, self.yaw)
 
     def callback(self, msg):
         imu_quat = msg.orientation
         _, _, yaw = euler_from_quaternion(
             [imu_quat.x, imu_quat.y, imu_quat.z, imu_quat.w]
         )
-        self.yaw = self.nomalizor.filter(yaw)
-        print(self.yaw)
+
+        yaw = self.nomalizor.filter(yaw)
+        test_yaw = self.test_normalizor.dfilter(yaw)
+
+        self.float_publisher.publish(Float32MultiArray(data=[yaw, test_yaw]))
+
+        self.yaw = yaw
 
 
 def main(args=None):
