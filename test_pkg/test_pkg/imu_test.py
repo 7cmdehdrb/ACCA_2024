@@ -109,13 +109,16 @@ class ImuTest(Node):
         self.nomalizor = Normalizaor()
         self.test_normalizor = Normalizaor()
         self.imu_subscriber = self.create_subscription(
-            Imu, "/imu/data", self.callback, 10
+            Imu, "/imu/data", self.callback, qos_profile_system_default
         )
-        self.float_publisher = self.create_publisher(
-            Float32MultiArray, "/test", qos_profile=qos_profile_system_default
+        self.imu_publisher = self.create_publisher(
+            Imu, "/imu/test", qos_profile=qos_profile_system_default
         )
+        # self.float_publisher = self.create_publisher(
+        #     Float32MultiArray, "/test", qos_profile=qos_profile_system_default
+        # )
 
-        self.yaw = 0.0
+        self.yaw = None
 
     def callback(self, msg):
         imu_quat = msg.orientation
@@ -123,12 +126,45 @@ class ImuTest(Node):
             [imu_quat.x, imu_quat.y, imu_quat.z, imu_quat.w]
         )
 
-        yaw = self.nomalizor.filter(yaw)
-        test_yaw = self.test_normalizor.dfilter(yaw)
+        if self.yaw is None:
+            self.yaw = yaw
 
-        self.float_publisher.publish(Float32MultiArray(data=[yaw, test_yaw]))
+        yaw = yaw - self.yaw
+
+        # yaw = self.nomalizor.filter(yaw)
+        # test_yaw = self.test_normalizor.dfilter(yaw)
+
+        # self.float_publisher.publish(Float32MultiArray(data=[yaw, test_yaw]))
 
         self.yaw = yaw
+
+        qx, qy, qz, qw = quaternion_from_euler(0.0, 0.0, self.yaw)
+
+        imu_data = msg
+
+        # imu_data.header.frame_id = "imu_link"
+        # imu_data.header.stamp = Time().to_msg()
+
+        imu_data.orientation.x = qx
+        imu_data.orientation.y = qy
+        imu_data.orientation.z = qz
+        imu_data.orientation.w = qw
+
+        imu_data.orientation_covariance = [
+            0.00025000000000000005,
+            0.0,
+            0.0,
+            0.0,
+            0.00025000000000000005,
+            0.0,
+            0.0,
+            0.0,
+            0.00025000000000000005,
+        ]
+
+        # print(imu_data)
+
+        self.imu_publisher.publish(imu_data)
 
 
 def main(args=None):

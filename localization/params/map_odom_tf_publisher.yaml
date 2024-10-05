@@ -23,7 +23,7 @@ map_odom_tf_node:
 
       # threshold for queue to determine tf is valid. int. 
       # this field must be lesser than queue_length (or same)
-      valid_threshold: 15 # Tune  
+      valid_threshold: 5 # Tune  
 
       # threshold for queue to determine tf is invalid. int.
       # this field must be lesser than queue_length (or same)

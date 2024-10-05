@@ -181,7 +181,8 @@ NavSatTransform::NavSatTransform(const rclcpp::NodeOptions & options)
     "gps/fix", custom_qos, std::bind(&NavSatTransform::gpsFixCallback, this, _1),
     subscriber_options);
 
-  if (!use_odometry_yaw_ && !use_manual_datum_) {
+  if(!use_odometry_yaw_ && !use_manual_datum_) {
+  // if (true) {
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
       "imu", custom_qos, std::bind(&NavSatTransform::imuCallback, this, _1), subscriber_options);
   }
@@ -483,6 +484,7 @@ nav_msgs::msg::Odometry NavSatTransform::cartesianToMap(
   // position at that timestamp
   gps_odom.header.frame_id = world_frame_id_;
   gps_odom.header.stamp = gps_update_time_;
+  gps_odom.child_frame_id = "base_link";
 
   // Now fill out the message. Set the orientation to the identity.
   tf2::toMsg(transformed_cartesian_gps, gps_odom.pose.pose);
