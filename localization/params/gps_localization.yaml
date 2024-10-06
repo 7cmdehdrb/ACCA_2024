@@ -1,0 +1,4 @@
+gps_localization_node:
+  ros__parameters:
+    # gps_origin: [37.4961657, 126.9570535] # school
+    gps_origin: [37.23963, 126.77449] # kcity

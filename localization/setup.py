@@ -26,8 +26,9 @@ setup(
         "console_scripts": [
             "kalman_localization = localization.kalman_localization:main",
             "map_odom_tf_publisher = localization.map_odom_tf_publisher:main",
-            # "map_odom_tf_publisher2 = localization.map_odom_tf_publisher2:main",
             "real_time_map_server = localization.real_time_map_server:main",
+            "osm = localization.osm:main",
+            "gps_localization = localization.gps_localization:main",
         ],
     },
 )

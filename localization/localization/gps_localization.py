@@ -3,16 +3,62 @@ from rclpy.time import Time
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default
+import tf2_ros
 import numpy as np
 import math as m
 import time
 import pyproj
-from quaternion import *
-from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Point, Quaternion
 from sensor_msgs.msg import NavSatFix, Imu
 from nav_msgs.msg import Odometry
 from erp42_msgs.msg import SerialFeedBack
+
+
+def euler_from_quaternion(quaternion):
+    """
+    Converts quaternion (w in last place) to euler roll, pitch, yaw
+    quaternion = [x, y, z, w]
+    Bellow should be replaced when porting for ROS 2 Python tf_conversions is done.
+    """
+    x = quaternion[0]
+    y = quaternion[1]
+    z = quaternion[2]
+    w = quaternion[3]
+
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+    sinp = 2 * (w * y - z * x)
+    pitch = np.arcsin(sinp)
+
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    return roll, pitch, yaw
+
+
+def quaternion_from_euler(roll, pitch, yaw):
+    """
+    Converts euler roll, pitch, yaw to quaternion (w in last place)
+    quat = [x, y, z, w]
+    Bellow should be replaced when porting for ROS 2 Python tf_conversions is done.
+    """
+    qx = np.sin(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) - np.cos(
+        roll / 2
+    ) * np.sin(pitch / 2) * np.sin(yaw / 2)
+    qy = np.cos(roll / 2) * np.sin(pitch / 2) * np.cos(yaw / 2) + np.sin(
+        roll / 2
+    ) * np.cos(pitch / 2) * np.sin(yaw / 2)
+    qz = np.cos(roll / 2) * np.cos(pitch / 2) * np.sin(yaw / 2) - np.sin(
+        roll / 2
+    ) * np.sin(pitch / 2) * np.cos(yaw / 2)
+    qw = np.cos(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) + np.sin(
+        roll / 2
+    ) * np.sin(pitch / 2) * np.sin(yaw / 2)
+
+    return qx, qy, qz, qw
 
 
 class LowPassFilter:
@@ -99,6 +145,7 @@ class Ublox:
 
         self.data = self.Data()
         self.normalizor = Normalizaor()
+        self.valid = False
 
         # Sensing Data
         self.x = np.array(
@@ -132,17 +179,20 @@ class Ublox:
         self.tm = pyproj.CRS("epsg:2097")  # m
         self.transformer = pyproj.Transformer.from_crs(self.gps, self.tm)
 
-        # TODO-change to param
-        self.base_x, self.base_y = self.transformer.transform(37.4961657, 126.9570535)
-        # self.base_x, self.base_y = self.transformer.transform(
-        #     37.23963, 126.77449
-        # )  # kcity
+        gps_origin = (
+            self.node.get_parameter("gps_origin")
+            .get_parameter_value()
+            .double_array_value
+        )
+        self.base_x, self.base_y = self.transformer.transform(
+            gps_origin[0], gps_origin[1]
+        )
 
         self.last_point = Point()
 
         self.gps_subscriber = self.node.create_subscription(
             NavSatFix,
-            "/ublox_gps_node/random",
+            "/ublox_gps_node/fix",
             callback=self.gps_callback,
             qos_profile=qos_profile_system_default,
         )
@@ -167,11 +217,12 @@ class Ublox:
             / 0.125
         )
 
-        if (
+        self.valid = (
             1.0 < self.data.vel
             and self.data.vel < 10.0
             and self.data.position_covariance[0] < 0.01
-        ):
+        )
+        if self.valid:
             yaw = self.normalizor.filter(atan)
             self.data.yaw = yaw
 
@@ -179,10 +230,8 @@ class Ublox:
             [
                 self.data.x,  # x
                 self.data.y,  # y
-                0.0,
-                0.0,
-                # self.data.yaw,  # yaw
-                # self.data.vel,  # v
+                0.0,  # yaw
+                0.0,  # v
             ]
         )
         self.cov = np.array(
@@ -320,6 +369,7 @@ class ERP42:
         self.node = node
 
         self.data = self.Data()
+        self.drive = True
 
         # Sensing Data
         self.x = np.array(
@@ -358,7 +408,8 @@ class ERP42:
     def serial_callback(self, msg):
         self.data.parse(msg)
 
-        self.data.vel = self.data.speed
+        self.drive = self.data.gear == 2
+        self.data.vel = self.data.speed * 1.0 if self.drive else -1.0
 
         self.x = np.array(
             [
@@ -424,6 +475,9 @@ class Kalman:
         self.odom_publisher = self.node.create_publisher(
             Odometry, "/odometry/kalman", qos_profile=qos_profile_system_default
         )
+        self.tf_publisher = tf2_ros.TransformBroadcaster(
+            self.node, qos=qos_profile_system_default
+        )
 
         # Loop
         self.node.create_timer(float(1 / 30.0), callback=self.main)
@@ -434,20 +488,10 @@ class Kalman:
         self.dt = current_time - self.last_time
 
         # Sensor Calibration
-        if (
-            1.0 < self.ublox.data.vel
-            and self.ublox.data.vel < 10.0
-            and self.ublox.data.yaw != 0.0
-        ):
+        if self.ublox.valid:
             self.xsens.offset = self.af.filter(
                 self.ublox.data.yaw - self.xsens.data.yaw
             )
-        print(
-            self.ublox.data.yaw,
-            self.xsens.data.yaw,
-            self.ublox.data.yaw - self.xsens.data.yaw,
-            self.xsens.offset,
-        )
 
         self.A = np.array(
             [
@@ -519,9 +563,8 @@ class Kalman:
 
         self.last_time = current_time
 
-        # print(self.x[2], m.degrees(self.xsens_offset))
-
         self.odom_publisher.publish(self.create_odometry())
+        self.tf_publisher.sendTransform(self.create_tf())
 
         return self.x, self.P
 
@@ -542,15 +585,32 @@ class Kalman:
 
         msg.pose.covariance[0] = self.P[0][0]
         msg.pose.covariance[7] = self.P[1][1]
-        msg.pose.covariance[35] = self.P[2][2]
 
         msg.twist.twist.linear.x = self.x[3] * m.cos(self.x[2])
         msg.twist.twist.linear.y = self.x[3] * m.sin(self.x[2])
 
         msg.twist.covariance[0] = self.P[3][3]  # linear x 0-5
-        msg.twist.covariance[7] = self.P[3][3]  # linear y 6-11
 
         return msg
+
+    def create_tf(self):
+        tf_msg = tf2_ros.TransformStamped()
+
+        tf_msg.header.frame_id = "utm"
+        tf_msg.header.stamp = Time().to_msg()
+        tf_msg.child_frame_id = "base_link"
+
+        tf_msg.transform.translation.x = self.x[0]
+        tf_msg.transform.translation.y = self.x[1]
+        tf_msg.transform.translation.z = 0.0
+
+        x, y, z, w = quaternion_from_euler(0.0, 0.0, self.x[2])
+        tf_msg.transform.rotation.x = x
+        tf_msg.transform.rotation.y = y
+        tf_msg.transform.rotation.z = z
+        tf_msg.transform.rotation.w = w
+
+        return tf_msg
 
 
 class GPSLocalizer:
@@ -616,6 +676,13 @@ def main():
     rclpy.init(args=None)
 
     node = Node(node_name="gps_localization_node")
+
+    node.declare_parameters(
+        namespace="",
+        parameters=[
+            ("gps_origin", [37.4961657, 126.9570535]),
+        ],
+    )
 
     xsens = Xsens(node)
     ublox = Ublox(node)
