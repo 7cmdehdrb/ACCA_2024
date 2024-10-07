@@ -75,7 +75,8 @@ class OSM(Node):
                     "osm_file",
                     "/home/acca/catkin_ws/src/localization/resource/school.osm",
                 ),
-                ("gps_origin", [37.4961657, 126.9570535]),
+                # ("gps_origin", [37.4961657, 126.9570535]),
+                ("gps_origin", [37.496253, 126.957289]),
                 ("timer_period_sec", 0.0),
             ],
         )
@@ -119,7 +120,7 @@ class OSM(Node):
 
         for i, way in enumerate(self.ways):
             marker = Marker()
-            marker.header.frame_id = "utm"
+            marker.header.frame_id = "odom"
             marker.header.stamp = Time().to_msg()
 
             marker.ns = "path"
@@ -163,7 +164,7 @@ class OSM(Node):
         # Node
         for i, tag in enumerate(self.tags):
             marker = Marker()
-            marker.header.frame_id = "utm"  # 적절한 좌표 프레임 설정
+            marker.header.frame_id = "odom"  # 적절한 좌표 프레임 설정
             marker.header.stamp = Time().to_msg()
             marker.ns = "node"
             marker.id = i  # 각 마커의 고유 ID

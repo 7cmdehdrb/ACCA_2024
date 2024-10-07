@@ -571,7 +571,7 @@ class Kalman:
     def create_odometry(self):
         msg = Odometry()
 
-        msg.header.frame_id = "utm"
+        msg.header.frame_id = "odom"
         msg.header.stamp = Time().to_msg()
 
         msg.pose.pose.position.x = self.x[0]
@@ -596,7 +596,7 @@ class Kalman:
     def create_tf(self):
         tf_msg = tf2_ros.TransformStamped()
 
-        tf_msg.header.frame_id = "utm"
+        tf_msg.header.frame_id = "odom"
         tf_msg.header.stamp = Time().to_msg()
         tf_msg.child_frame_id = "base_link"
 
@@ -633,7 +633,7 @@ class GPSLocalizer:
 
     def create_gps_odometry(self):
         msg = Odometry()
-        msg.header.frame_id = "utm"
+        msg.header.frame_id = "odom"
         msg.header.stamp = Time().to_msg()
 
         qx, qy, qz, qw = quaternion_from_euler(0.0, 0.0, self.ublox.data.yaw)
