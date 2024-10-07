@@ -64,7 +64,7 @@ def calculate_lat_lon_bounds(center_lat, center_lon, zoom, img_width, img_height
 
 
 # 샘플 사용 예시
-api_key = "AIzaSyDg3kjZ6yP7WX9G46Q1f56PNUectqwJ3u4"
+api_key = ""
 center_lat = 37.4961657
 center_lon = 126.9570535
 center = "{},{}".format(str(center_lat), str(center_lon))  # 서울 중심 좌표
