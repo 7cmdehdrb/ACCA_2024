@@ -490,18 +490,19 @@ class Kalman:
 
         self.dt = current_time - self.last_time
 
-        # Sensor Calibration2
+        # Sensor Calibration
         if self.ublox.valid:
             self.xsens.offset = self.lpf.filter(
                 self.ublox.data.yaw - self.xsens.data.yaw
             ) + (0.0 if self.erp42.drive else m.pi)
-            # self.xsens.offset = self.af.filter(
-            #     self.ublox.data.yaw - self.xsens.data.yaw
-            # )
 
         self.node.get_logger().info(
-            "V: {}, YAW: {}, OFFSET: {}".format(
-                round(self.x[3], 3), round(self.x[2], 3), self.xsens.offset
+            "X: {}, Y: {}, V: {}, YAW: {}, OFFSET: {}".format(
+                round(self.x[0], 3),
+                round(self.x[1], 3),
+                round(self.x[3], 3),
+                round(self.x[2], 3),
+                round(self.xsens.offset, 5),
             )
         )
         # print(self.x, self.xsens.offset)
