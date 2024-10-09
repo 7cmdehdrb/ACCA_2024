@@ -65,7 +65,7 @@ class LowPassFilter:
     def __init__(self, cutoff_freq, ts):
         self.ts = ts
         self.cutoff_freq = cutoff_freq
-        self.pre_out = 0.0
+        self.pre_out = None
         self.tau = self.calc_filter_coef()
 
     def calc_filter_coef(self):
@@ -73,6 +73,8 @@ class LowPassFilter:
         return 1 / w_cut
 
     def filter(self, data):
+        if self.pre_out is None:
+            self.pre_out = data
         out = (self.tau * self.pre_out + self.ts * data) / (self.tau + self.ts)
         self.pre_out = out
         return out
@@ -218,7 +220,7 @@ class Ublox:
         )
 
         self.valid = (
-            1.0 < self.data.vel
+            0.3 < self.data.vel
             and self.data.vel < 10.0
             and self.data.position_covariance[0] < 0.01
         )
@@ -430,6 +432,7 @@ class Kalman:
         self.erp42 = erp42
 
         self.af = AverageFilter()
+        self.lpf = LowPassFilter(0.5, 0.01)
         self.xsens_offset = 0.0
 
         self.last_time = time.time()
@@ -487,11 +490,21 @@ class Kalman:
 
         self.dt = current_time - self.last_time
 
-        # Sensor Calibration
+        # Sensor Calibration2
         if self.ublox.valid:
-            self.xsens.offset = self.af.filter(
+            self.xsens.offset = self.lpf.filter(
                 self.ublox.data.yaw - self.xsens.data.yaw
+            ) + (0.0 if self.erp42.drive else m.pi)
+            # self.xsens.offset = self.af.filter(
+            #     self.ublox.data.yaw - self.xsens.data.yaw
+            # )
+
+        self.node.get_logger().info(
+            "V: {}, YAW: {}, OFFSET: {}".format(
+                round(self.x[3], 3), round(self.x[2], 3), self.xsens.offset
             )
+        )
+        # print(self.x, self.xsens.offset)
 
         self.A = np.array(
             [
